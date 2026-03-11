@@ -14,6 +14,13 @@ Given a careers URL or ATS company slug, poll the backing jobs API, filter for r
 - Store previously seen job IDs
 - Send a simple notification when a new matching role appears
 
+## Chosen Stack
+
+- Frontend: React + TypeScript + Vite
+- Backend: Go
+- Database: SQLite
+- Worker: Go background process
+
 ## Why This Approach
 
 - Less brittle than Playwright or DOM scraping
@@ -29,7 +36,7 @@ Given a careers URL or ATS company slug, poll the backing jobs API, filter for r
 
 ## Current Spike
 
-The first working slice focuses on normalizing ATS inputs into a stable identifier:
+The current Go spike focuses on normalizing ATS inputs into a stable identifier:
 
 - Lever: `provider=lever`, `identifierKind=site`
 - Greenhouse: `provider=greenhouse`, `identifierKind=board_token`
@@ -42,20 +49,29 @@ This is the foundation for a hybrid UX:
 
 ## Usage
 
-Install nothing. This spike uses the built-in Node.js test runner.
+The repo now contains:
+
+- a Go ATS identifier parser
+- an embedded seed catalog
+- a developer CLI for testing ATS resolution
+- an initial SQLite schema
+
+Read the system design in [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+## Usage
 
 ```bash
-npm test
+go test ./...
 ```
 
 Detect an ATS board from a direct provider URL:
 
 ```bash
-npm run detect -- https://job-boards.greenhouse.io/greenhouse
+go run ./cmd/atsctl detect https://job-boards.greenhouse.io/greenhouse
 ```
 
 List the seeded catalog entries:
 
 ```bash
-npm run companies
+go run ./cmd/atsctl companies
 ```
