@@ -1,0 +1,11 @@
+{
+  "name": "ats-job-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "detect": "node src/cli.js detect",
+    "companies": "node src/cli.js companies"
+  }
+}

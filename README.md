@@ -26,3 +26,36 @@ Given a careers URL or ATS company slug, poll the backing jobs API, filter for r
 2. Implement fetchers for Lever, Greenhouse, and Ashby.
 3. Add a diff step against stored seen jobs.
 4. Send alerts through email, Slack, or SMS.
+
+## Current Spike
+
+The first working slice focuses on normalizing ATS inputs into a stable identifier:
+
+- Lever: `provider=lever`, `identifierKind=site`
+- Greenhouse: `provider=greenhouse`, `identifierKind=board_token`
+- Ashby: `provider=ashby`, `identifierKind=job_board_name`
+
+This is the foundation for a hybrid UX:
+
+- Let users pick from a curated company list when we already know the ATS identifier
+- Let users paste a direct ATS job board URL when the company is not in our catalog yet
+
+## Usage
+
+Install nothing. This spike uses the built-in Node.js test runner.
+
+```bash
+npm test
+```
+
+Detect an ATS board from a direct provider URL:
+
+```bash
+npm run detect -- https://job-boards.greenhouse.io/greenhouse
+```
+
+List the seeded catalog entries:
+
+```bash
+npm run companies
+```

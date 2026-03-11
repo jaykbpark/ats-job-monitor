@@ -1,0 +1,20 @@
+[
+  {
+    "id": "lever",
+    "name": "Lever",
+    "provider": "lever",
+    "boardKey": "lever"
+  },
+  {
+    "id": "greenhouse",
+    "name": "Greenhouse",
+    "provider": "greenhouse",
+    "boardKey": "greenhouse"
+  },
+  {
+    "id": "ashby",
+    "name": "Ashby",
+    "provider": "ashby",
+    "boardKey": "Ashby"
+  }
+]
