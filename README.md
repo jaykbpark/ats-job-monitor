@@ -54,7 +54,7 @@ The repo now contains:
 - a Go ATS identifier parser
 - an embedded seed catalog
 - a developer CLI for testing ATS resolution
-- an initial SQLite schema
+- a SQLite store package with versioned migrations
 
 Read the system design in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
@@ -74,4 +74,10 @@ List the seeded catalog entries:
 
 ```bash
 go run ./cmd/atsctl companies
+```
+
+Apply SQLite migrations to a local database file:
+
+```bash
+go run ./cmd/atsctl migrate ./ats-job-monitor.db
 ```

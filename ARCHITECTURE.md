@@ -60,7 +60,7 @@ Every adapter should return the same internal job shape so filtering and diffing
 
 ## Data Model
 
-The first schema lives in [db/schema.sql](./db/schema.sql).
+The first versioned schema lives in [db/migrations/0001_init.sql](./db/migrations/0001_init.sql).
 
 Core tables:
 
@@ -96,8 +96,8 @@ The repo will move toward this layout:
 - `cmd/`: Go executables such as API server, worker, and developer CLI
 - `internal/ats/`: ATS URL resolution and provider-specific logic
 - `internal/catalog/`: curated company catalog
-- `internal/store/`: database access and migrations glue
-- `db/`: SQLite schema and migrations
+- `internal/store/`: database access and migration runner
+- `db/migrations/`: versioned SQLite migrations
 - `frontend/`: React application
 
 The current commit only lays the Go backend foundation plus the first schema and ATS resolution library.
