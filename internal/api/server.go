@@ -33,7 +33,7 @@ type createWatchTargetRequest struct {
 
 func NewServer(store *store.Store, syncService *monitorpkg.Service) *Server {
 	if syncService == nil {
-		syncService = monitorpkg.NewService(store, nil)
+		syncService = monitorpkg.NewService(store, nil, nil)
 	}
 
 	server := &Server{

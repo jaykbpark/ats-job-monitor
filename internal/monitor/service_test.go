@@ -18,6 +18,15 @@ func (f *fakeGreenhouseFetcher) FetchJobs(ctx context.Context, boardKey string) 
 	return f.jobs, f.err
 }
 
+type fakeLeverFetcher struct {
+	jobs []providers.Job
+	err  error
+}
+
+func (f *fakeLeverFetcher) FetchJobs(ctx context.Context, boardKey string) ([]providers.Job, error) {
+	return f.jobs, f.err
+}
+
 func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 	ctx := context.Background()
 	dbStore := openMonitorTestStore(t)
@@ -47,7 +56,7 @@ func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 				RawJSON:       `{"id":42}`,
 			},
 		},
-	})
+	}, nil)
 
 	run, err := service.SyncWatchTarget(ctx, target.ID)
 	if err != nil {
@@ -78,6 +87,61 @@ func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 
 	if len(runs) != 1 {
 		t.Fatalf("expected 1 sync run, got %d", len(runs))
+	}
+}
+
+func TestSyncWatchTargetSupportsLever(t *testing.T) {
+	ctx := context.Background()
+	dbStore := openMonitorTestStore(t)
+	defer func() {
+		_ = dbStore.Close()
+	}()
+
+	target, err := dbStore.CreateWatchTarget(ctx, store.CreateWatchTargetParams{
+		Name:      "Lever Demo",
+		Provider:  "lever",
+		BoardKey:  "leverdemo",
+		SourceURL: "https://jobs.lever.co/leverdemo",
+	})
+	if err != nil {
+		t.Fatalf("create watch target: %v", err)
+	}
+
+	service := NewService(dbStore, nil, &fakeLeverFetcher{
+		jobs: []providers.Job{
+			{
+				ExternalJobID:  "job-1",
+				Title:          "Software Engineer",
+				Location:       "Remote",
+				Department:     "Engineering",
+				EmploymentType: "Full-time",
+				JobURL:         "https://jobs.lever.co/leverdemo/job-1",
+				MetadataJSON:   `{"workplaceType":"remote"}`,
+				RawJSON:        `{"id":"job-1"}`,
+			},
+		},
+	})
+
+	run, err := service.SyncWatchTarget(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("sync lever watch target: %v", err)
+	}
+
+	if run.Status != "succeeded" {
+		t.Fatalf("expected succeeded run, got %q", run.Status)
+	}
+
+	jobs, err := dbStore.ListJobsByWatchTarget(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("list synced jobs: %v", err)
+	}
+
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 persisted lever job, got %d", len(jobs))
+	}
+
+	if jobs[0].EmploymentType != "Full-time" {
+		t.Fatalf("unexpected employment type: %q", jobs[0].EmploymentType)
 	}
 }
 

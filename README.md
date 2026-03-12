@@ -54,7 +54,7 @@ The repo now contains:
 - a Go ATS identifier parser
 - an embedded seed catalog
 - a runnable Go API skeleton
-- a Greenhouse-backed sync path from API trigger to stored jobs
+- Greenhouse and Lever sync paths from API trigger to stored jobs
 - a developer CLI for testing ATS resolution
 - a SQLite store package with versioned migrations
 

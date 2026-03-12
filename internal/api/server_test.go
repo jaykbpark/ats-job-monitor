@@ -23,6 +23,15 @@ func (f *fakeGreenhouseFetcher) FetchJobs(ctx context.Context, boardKey string) 
 	return f.jobs, f.err
 }
 
+type fakeLeverFetcher struct {
+	jobs []providers.Job
+	err  error
+}
+
+func (f *fakeLeverFetcher) FetchJobs(ctx context.Context, boardKey string) ([]providers.Job, error) {
+	return f.jobs, f.err
+}
+
 func TestHealthEndpoint(t *testing.T) {
 	server := newTestServer(t)
 
@@ -206,7 +215,7 @@ func newTestServer(t *testing.T) *Server {
 				RawJSON:       `{"id":42}`,
 			},
 		},
-	}))
+	}, &fakeLeverFetcher{}))
 }
 
 func createWatchTargetForTest(t *testing.T, server *Server) {

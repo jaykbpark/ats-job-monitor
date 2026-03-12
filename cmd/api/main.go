@@ -31,7 +31,7 @@ func main() {
 		fatalf("apply migrations: %v", err)
 	}
 
-	server := api.NewServer(dbStore, monitor.NewService(dbStore, nil))
+	server := api.NewServer(dbStore, monitor.NewService(dbStore, nil, nil))
 	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           server.Handler(),
