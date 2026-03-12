@@ -57,6 +57,7 @@ The repo now contains:
 - Greenhouse, Lever, and Ashby sync paths from API trigger to stored jobs
 - a typed hard-filter schema for watch target preferences
 - persisted derived job signals for matching
+- a live signal-audit CLI for provider-backed spot checks
 - a developer CLI for testing ATS resolution
 - a SQLite store package with versioned migrations
 
@@ -84,6 +85,19 @@ Apply SQLite migrations to a local database file:
 
 ```bash
 go run ./cmd/atsctl migrate ./ats-job-monitor.db
+```
+
+Run the live signal audit against the embedded board manifest:
+
+```bash
+go run ./cmd/atsctl audit-signals
+```
+
+Filter the live audit to one provider or switch to JSON output:
+
+```bash
+go run ./cmd/atsctl audit-signals --provider ashby --sample 2
+go run ./cmd/atsctl audit-signals --format json --limit 5
 ```
 
 Run the API server:

@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/jaykbpark/ats-job-monitor/internal/ats"
+	"github.com/jaykbpark/ats-job-monitor/internal/audit"
 	"github.com/jaykbpark/ats-job-monitor/internal/catalog"
 	"github.com/jaykbpark/ats-job-monitor/internal/store"
 )
@@ -24,6 +26,8 @@ func main() {
 		runCompanies(os.Args[2:])
 	case "migrate":
 		runMigrate(os.Args[2:])
+	case "audit-signals":
+		runAuditSignals(os.Args[2:])
 	default:
 		printUsage(1)
 	}
@@ -82,6 +86,35 @@ func runMigrate(args []string) {
 	writeJSON(records)
 }
 
+func runAuditSignals(args []string) {
+	flagSet := flag.NewFlagSet("audit-signals", flag.ExitOnError)
+	format := flagSet.String("format", "markdown", "output format: markdown or json")
+	provider := flagSet.String("provider", "", "optional provider filter: greenhouse, lever, or ashby")
+	sampleSize := flagSet.Int("sample", 3, "engineering jobs to sample per board")
+	targetLimit := flagSet.Int("limit", 0, "maximum number of boards to audit after filtering")
+	flagSet.Parse(args)
+
+	report, err := audit.RunSignalAudit(context.Background(), audit.SignalAuditOptions{
+		ProviderFilter: *provider,
+		SampleSize:     *sampleSize,
+		TargetLimit:    *targetLimit,
+	})
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "failed to run signal audit: %v\n", err)
+		os.Exit(1)
+	}
+
+	switch strings.ToLower(strings.TrimSpace(*format)) {
+	case "json":
+		writeJSON(report)
+	case "markdown", "md":
+		fmt.Print(audit.RenderMarkdownReport(report))
+	default:
+		_, _ = fmt.Fprintf(os.Stderr, "unsupported format %q\n", *format)
+		os.Exit(1)
+	}
+}
+
 func writeJSON(value any) {
 	output, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
@@ -97,5 +130,6 @@ func printUsage(exitCode int) {
 	_, _ = fmt.Fprintln(os.Stderr, "  go run ./cmd/atsctl detect <ats-url>")
 	_, _ = fmt.Fprintln(os.Stderr, "  go run ./cmd/atsctl companies [query]")
 	_, _ = fmt.Fprintln(os.Stderr, "  go run ./cmd/atsctl migrate <db-path>")
+	_, _ = fmt.Fprintln(os.Stderr, "  go run ./cmd/atsctl audit-signals [--format markdown|json] [--provider greenhouse|lever|ashby] [--sample N] [--limit N]")
 	os.Exit(exitCode)
 }

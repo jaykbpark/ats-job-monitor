@@ -1,0 +1,92 @@
+[
+  {
+    "name": "Stripe",
+    "provider": "greenhouse",
+    "boardKey": "stripe"
+  },
+  {
+    "name": "Figma",
+    "provider": "greenhouse",
+    "boardKey": "figma"
+  },
+  {
+    "name": "Vercel",
+    "provider": "greenhouse",
+    "boardKey": "vercel"
+  },
+  {
+    "name": "Datadog",
+    "provider": "greenhouse",
+    "boardKey": "datadog"
+  },
+  {
+    "name": "Roblox",
+    "provider": "greenhouse",
+    "boardKey": "roblox"
+  },
+  {
+    "name": "Scale AI",
+    "provider": "greenhouse",
+    "boardKey": "scaleai"
+  },
+  {
+    "name": "OpenAI",
+    "provider": "ashby",
+    "boardKey": "OpenAI"
+  },
+  {
+    "name": "Ramp",
+    "provider": "ashby",
+    "boardKey": "Ramp"
+  },
+  {
+    "name": "Notion",
+    "provider": "ashby",
+    "boardKey": "Notion"
+  },
+  {
+    "name": "Zapier",
+    "provider": "ashby",
+    "boardKey": "Zapier"
+  },
+  {
+    "name": "Snowflake",
+    "provider": "ashby",
+    "boardKey": "Snowflake"
+  },
+  {
+    "name": "Substack",
+    "provider": "ashby",
+    "boardKey": "Substack"
+  },
+  {
+    "name": "Tutor Intelligence",
+    "provider": "lever",
+    "boardKey": "tutorintelligence"
+  },
+  {
+    "name": "Instrumentl",
+    "provider": "lever",
+    "boardKey": "Instrumentl"
+  },
+  {
+    "name": "System1",
+    "provider": "lever",
+    "boardKey": "system1"
+  },
+  {
+    "name": "Entrata",
+    "provider": "lever",
+    "boardKey": "entrata"
+  },
+  {
+    "name": "Level AI",
+    "provider": "lever",
+    "boardKey": "levelai"
+  },
+  {
+    "name": "Reveal Tech",
+    "provider": "lever",
+    "boardKey": "revealtech"
+  }
+]
