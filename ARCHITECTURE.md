@@ -38,6 +38,13 @@ The Go API owns:
 - triggering manual syncs
 - serving the curated company catalog
 
+Current skeleton endpoints:
+
+- `GET /health`
+- `GET /api/companies`
+- `GET /api/watch-targets`
+- `POST /api/watch-targets`
+
 ### Worker
 
 The worker is a separate Go process that:
@@ -94,10 +101,11 @@ For the first version, filters should be stored as JSON on `watch_targets`. That
 The repo will move toward this layout:
 
 - `cmd/`: Go executables such as API server, worker, and developer CLI
+- `internal/api/`: HTTP server and handlers
 - `internal/ats/`: ATS URL resolution and provider-specific logic
 - `internal/catalog/`: curated company catalog
 - `internal/store/`: database access and migration runner
 - `db/migrations/`: versioned SQLite migrations
 - `frontend/`: React application
 
-The current commit only lays the Go backend foundation plus the first schema and ATS resolution library.
+The current repo includes the first runnable API skeleton on top of the SQLite store.

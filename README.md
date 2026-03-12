@@ -53,6 +53,7 @@ The repo now contains:
 
 - a Go ATS identifier parser
 - an embedded seed catalog
+- a runnable Go API skeleton
 - a developer CLI for testing ATS resolution
 - a SQLite store package with versioned migrations
 
@@ -81,3 +82,16 @@ Apply SQLite migrations to a local database file:
 ```bash
 go run ./cmd/atsctl migrate ./ats-job-monitor.db
 ```
+
+Run the API server:
+
+```bash
+go run ./cmd/api
+```
+
+The API currently serves:
+
+- `GET /health`
+- `GET /api/companies`
+- `GET /api/watch-targets`
+- `POST /api/watch-targets`
