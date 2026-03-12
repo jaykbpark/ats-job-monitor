@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jaykbpark/ats-job-monitor/internal/catalog"
+	"github.com/jaykbpark/ats-job-monitor/internal/filters"
 	monitorpkg "github.com/jaykbpark/ats-job-monitor/internal/monitor"
 	"github.com/jaykbpark/ats-job-monitor/internal/store"
 )
@@ -170,14 +171,16 @@ func normalizeFilters(req createWatchTargetRequest) (string, error) {
 	}
 
 	if strings.TrimSpace(req.FiltersRaw) != "" {
-		if !json.Valid([]byte(req.FiltersRaw)) {
-			return "", errors.New("filtersJson must be valid JSON")
+		normalizedJSON, _, err := filters.NormalizeHardFiltersJSON(req.FiltersRaw)
+		if err != nil {
+			return "", fmt.Errorf("filtersJson is invalid: %w", err)
 		}
-		return req.FiltersRaw, nil
+		return normalizedJSON, nil
 	}
 
 	if req.Filters == nil {
-		return "{}", nil
+		normalizedJSON, _, err := filters.NormalizeHardFiltersJSON(`{}`)
+		return normalizedJSON, err
 	}
 
 	encoded, err := json.Marshal(req.Filters)
@@ -185,7 +188,12 @@ func normalizeFilters(req createWatchTargetRequest) (string, error) {
 		return "", errors.New("filters must be JSON-serializable")
 	}
 
-	return string(encoded), nil
+	normalizedJSON, _, err := filters.NormalizeHardFiltersJSON(string(encoded))
+	if err != nil {
+		return "", fmt.Errorf("filters are invalid: %w", err)
+	}
+
+	return normalizedJSON, nil
 }
 
 func writeJSON(w http.ResponseWriter, statusCode int, value any) {

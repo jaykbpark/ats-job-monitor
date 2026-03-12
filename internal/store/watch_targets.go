@@ -5,19 +5,22 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/jaykbpark/ats-job-monitor/internal/filters"
 )
 
 type WatchTarget struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	Provider     string `json:"provider"`
-	BoardKey     string `json:"boardKey"`
-	SourceURL    string `json:"sourceUrl,omitempty"`
-	FiltersJSON  string `json:"filtersJson"`
-	Status       string `json:"status"`
-	LastSyncedAt string `json:"lastSyncedAt,omitempty"`
-	CreatedAt    string `json:"createdAt"`
-	UpdatedAt    string `json:"updatedAt"`
+	ID           int64               `json:"id"`
+	Name         string              `json:"name"`
+	Provider     string              `json:"provider"`
+	BoardKey     string              `json:"boardKey"`
+	SourceURL    string              `json:"sourceUrl,omitempty"`
+	FiltersJSON  string              `json:"filtersJson"`
+	Filters      filters.HardFilters `json:"filters"`
+	Status       string              `json:"status"`
+	LastSyncedAt string              `json:"lastSyncedAt,omitempty"`
+	CreatedAt    string              `json:"createdAt"`
+	UpdatedAt    string              `json:"updatedAt"`
 }
 
 type CreateWatchTargetParams struct {
@@ -49,6 +52,12 @@ func (s *Store) CreateWatchTarget(ctx context.Context, params CreateWatchTargetP
 	if filtersJSON == "" {
 		filtersJSON = "{}"
 	}
+
+	normalizedFiltersJSON, _, err := filters.NormalizeHardFiltersJSON(filtersJSON)
+	if err != nil {
+		return WatchTarget{}, fmt.Errorf("invalid hard filters: %w", err)
+	}
+	filtersJSON = normalizedFiltersJSON
 
 	status := strings.TrimSpace(params.Status)
 	if status == "" {
@@ -156,6 +165,12 @@ func scanWatchTarget(row scanner) (WatchTarget, error) {
 		}
 		return WatchTarget{}, err
 	}
+
+	parsedFilters, err := filters.ParseHardFilters(target.FiltersJSON)
+	if err != nil {
+		return WatchTarget{}, fmt.Errorf("parse stored hard filters: %w", err)
+	}
+	target.Filters = parsedFilters
 
 	return target, nil
 }

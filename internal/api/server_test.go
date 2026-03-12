@@ -85,7 +85,7 @@ func TestCreateAndListWatchTargetsEndpoints(t *testing.T) {
 	  "boardKey": "greenhouse",
 	  "sourceUrl": "https://job-boards.greenhouse.io/greenhouse",
 	  "filters": {
-	    "keywords": ["platform", "backend"]
+	    "includeKeywordsAny": ["platform", "backend"]
 	  }
 	}`)
 
@@ -144,6 +144,67 @@ func TestCreateWatchTargetRejectsInvalidFiltersJSON(t *testing.T) {
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", recorder.Code)
+	}
+}
+
+func TestCreateWatchTargetRejectsUnknownFilterFields(t *testing.T) {
+	server := newTestServer(t)
+
+	body := []byte(`{
+	  "name": "Bad Filters",
+	  "provider": "greenhouse",
+	  "boardKey": "greenhouse",
+	  "filters": {
+	    "unknownField": true
+	  }
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-targets", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", recorder.Code)
+	}
+}
+
+func TestCreateWatchTargetReturnsTypedFilters(t *testing.T) {
+	server := newTestServer(t)
+
+	body := []byte(`{
+	  "name": "Typed Filters",
+	  "provider": "greenhouse",
+	  "boardKey": "greenhouse",
+	  "filters": {
+	    "locationsAny": [" Remote ", "Vancouver"],
+	    "includeKeywordsAny": ["backend"]
+	  }
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-targets", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var target map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &target); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+
+	filters, ok := target["filters"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected typed filters in response, got %#v", target["filters"])
+	}
+
+	if _, ok := filters["locationsAny"]; !ok {
+		t.Fatalf("expected locationsAny in typed filters response: %#v", filters)
 	}
 }
 

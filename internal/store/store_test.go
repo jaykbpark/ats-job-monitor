@@ -51,7 +51,7 @@ func TestCreateAndListWatchTargets(t *testing.T) {
 		Provider:    "greenhouse",
 		BoardKey:    "greenhouse",
 		SourceURL:   "https://job-boards.greenhouse.io/greenhouse",
-		FiltersJSON: `{"keywords":["platform"]}`,
+		FiltersJSON: `{"includeKeywordsAny":["platform"]}`,
 	})
 	if err != nil {
 		t.Fatalf("create watch target failed: %v", err)
@@ -80,6 +80,32 @@ func TestCreateAndListWatchTargets(t *testing.T) {
 
 	if targets[0].SourceURL != "https://job-boards.greenhouse.io/greenhouse" {
 		t.Fatalf("unexpected source url: %q", targets[0].SourceURL)
+	}
+
+	if len(targets[0].Filters.IncludeKeywordsAny) != 1 || targets[0].Filters.IncludeKeywordsAny[0] != "platform" {
+		t.Fatalf("unexpected parsed filters: %#v", targets[0].Filters)
+	}
+}
+
+func TestCreateWatchTargetRejectsInvalidFilters(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t)
+	defer func() {
+		_ = store.Close()
+	}()
+
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatalf("migrate failed: %v", err)
+	}
+
+	_, err := store.CreateWatchTarget(ctx, CreateWatchTargetParams{
+		Name:        "Greenhouse",
+		Provider:    "greenhouse",
+		BoardKey:    "greenhouse",
+		FiltersJSON: `{"minYearsExperience":6,"maxYearsExperience":2}`,
+	})
+	if err == nil {
+		t.Fatal("expected invalid filters to be rejected")
 	}
 }
 

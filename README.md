@@ -55,6 +55,7 @@ The repo now contains:
 - an embedded seed catalog
 - a runnable Go API skeleton
 - Greenhouse, Lever, and Ashby sync paths from API trigger to stored jobs
+- a typed hard-filter schema for watch target preferences
 - a developer CLI for testing ATS resolution
 - a SQLite store package with versioned migrations
 

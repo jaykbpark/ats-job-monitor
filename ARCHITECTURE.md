@@ -83,6 +83,8 @@ Core tables:
 
 For the first version, filters should be stored as JSON on `watch_targets`. That keeps the schema simple until we learn which filters deserve first-class columns.
 
+The JSON payload is now treated as a typed hard-filter schema in application code rather than an unstructured blob.
+
 ## Runtime Flow
 
 ### Add Watch
