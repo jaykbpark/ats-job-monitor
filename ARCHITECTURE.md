@@ -68,7 +68,7 @@ Each ATS gets its own adapter:
 
 Every adapter should return the same internal job shape so filtering and diffing stay provider-agnostic.
 
-Greenhouse and Lever are wired end to end.
+Greenhouse, Lever, and Ashby are wired end to end.
 
 ## Data Model
 

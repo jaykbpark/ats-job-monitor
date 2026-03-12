@@ -27,6 +27,15 @@ func (f *fakeLeverFetcher) FetchJobs(ctx context.Context, boardKey string) ([]pr
 	return f.jobs, f.err
 }
 
+type fakeAshbyFetcher struct {
+	jobs []providers.Job
+	err  error
+}
+
+func (f *fakeAshbyFetcher) FetchJobs(ctx context.Context, boardKey string) ([]providers.Job, error) {
+	return f.jobs, f.err
+}
+
 func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 	ctx := context.Background()
 	dbStore := openMonitorTestStore(t)
@@ -56,7 +65,7 @@ func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 				RawJSON:       `{"id":42}`,
 			},
 		},
-	}, nil)
+	}, nil, nil)
 
 	run, err := service.SyncWatchTarget(ctx, target.ID)
 	if err != nil {
@@ -120,7 +129,7 @@ func TestSyncWatchTargetSupportsLever(t *testing.T) {
 				RawJSON:        `{"id":"job-1"}`,
 			},
 		},
-	})
+	}, nil)
 
 	run, err := service.SyncWatchTarget(ctx, target.ID)
 	if err != nil {
@@ -142,6 +151,62 @@ func TestSyncWatchTargetSupportsLever(t *testing.T) {
 
 	if jobs[0].EmploymentType != "Full-time" {
 		t.Fatalf("unexpected employment type: %q", jobs[0].EmploymentType)
+	}
+}
+
+func TestSyncWatchTargetSupportsAshby(t *testing.T) {
+	ctx := context.Background()
+	dbStore := openMonitorTestStore(t)
+	defer func() {
+		_ = dbStore.Close()
+	}()
+
+	target, err := dbStore.CreateWatchTarget(ctx, store.CreateWatchTargetParams{
+		Name:      "Ashby",
+		Provider:  "ashby",
+		BoardKey:  "Ashby",
+		SourceURL: "https://jobs.ashbyhq.com/Ashby",
+	})
+	if err != nil {
+		t.Fatalf("create watch target: %v", err)
+	}
+
+	service := NewService(dbStore, nil, nil, &fakeAshbyFetcher{
+		jobs: []providers.Job{
+			{
+				ExternalJobID:  "job-1",
+				Title:          "Product Engineer",
+				Location:       "Remote - US",
+				Department:     "Engineering",
+				Team:           "Platform",
+				EmploymentType: "FullTime",
+				JobURL:         "https://jobs.ashbyhq.com/Ashby/job-1",
+				MetadataJSON:   `{"workplaceType":"Remote"}`,
+				RawJSON:        `{"id":"job-1"}`,
+			},
+		},
+	})
+
+	run, err := service.SyncWatchTarget(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("sync ashby watch target: %v", err)
+	}
+
+	if run.Status != "succeeded" {
+		t.Fatalf("expected succeeded run, got %q", run.Status)
+	}
+
+	jobs, err := dbStore.ListJobsByWatchTarget(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("list synced jobs: %v", err)
+	}
+
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 persisted ashby job, got %d", len(jobs))
+	}
+
+	if jobs[0].Team != "Platform" {
+		t.Fatalf("unexpected team: %q", jobs[0].Team)
 	}
 }
 

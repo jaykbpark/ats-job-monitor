@@ -17,24 +17,33 @@ type LeverFetcher interface {
 	FetchJobs(ctx context.Context, boardKey string) ([]providers.Job, error)
 }
 
+type AshbyFetcher interface {
+	FetchJobs(ctx context.Context, boardKey string) ([]providers.Job, error)
+}
+
 type Service struct {
 	store      *store.Store
 	greenhouse GreenhouseFetcher
 	lever      LeverFetcher
+	ashby      AshbyFetcher
 }
 
-func NewService(store *store.Store, greenhouse GreenhouseFetcher, lever LeverFetcher) *Service {
+func NewService(store *store.Store, greenhouse GreenhouseFetcher, lever LeverFetcher, ashby AshbyFetcher) *Service {
 	if greenhouse == nil {
 		greenhouse = providers.NewGreenhouseClient()
 	}
 	if lever == nil {
 		lever = providers.NewLeverClient()
 	}
+	if ashby == nil {
+		ashby = providers.NewAshbyClient()
+	}
 
 	return &Service{
 		store:      store,
 		greenhouse: greenhouse,
 		lever:      lever,
+		ashby:      ashby,
 	}
 }
 
@@ -50,6 +59,8 @@ func (s *Service) SyncWatchTarget(ctx context.Context, watchTargetID int64) (sto
 		jobs, err = s.greenhouse.FetchJobs(ctx, target.BoardKey)
 	case ats.ProviderLever:
 		jobs, err = s.lever.FetchJobs(ctx, target.BoardKey)
+	case ats.ProviderAshby:
+		jobs, err = s.ashby.FetchJobs(ctx, target.BoardKey)
 	default:
 		err = fmt.Errorf("provider %q is not supported for sync yet", target.Provider)
 	}
