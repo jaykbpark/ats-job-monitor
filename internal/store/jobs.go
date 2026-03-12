@@ -7,24 +7,33 @@ import (
 	"strings"
 
 	"github.com/jaykbpark/ats-job-monitor/internal/providers"
+	"github.com/jaykbpark/ats-job-monitor/internal/signals"
 )
 
 type JobRecord struct {
-	ID             int64  `json:"id"`
-	WatchTargetID  int64  `json:"watchTargetId"`
-	ExternalJobID  string `json:"externalJobId"`
-	Title          string `json:"title"`
-	Location       string `json:"location,omitempty"`
-	Department     string `json:"department,omitempty"`
-	Team           string `json:"team,omitempty"`
-	EmploymentType string `json:"employmentType,omitempty"`
-	JobURL         string `json:"jobUrl"`
-	MetadataJSON   string `json:"metadataJson"`
-	RawJSON        string `json:"rawJson"`
-	FirstSeenAt    string `json:"firstSeenAt"`
-	LastSeenAt     string `json:"lastSeenAt"`
-	MatchedAt      string `json:"matchedAt,omitempty"`
-	IsActive       bool   `json:"isActive"`
+	ID                       int64  `json:"id"`
+	WatchTargetID            int64  `json:"watchTargetId"`
+	ExternalJobID            string `json:"externalJobId"`
+	Title                    string `json:"title"`
+	Location                 string `json:"location,omitempty"`
+	Department               string `json:"department,omitempty"`
+	Team                     string `json:"team,omitempty"`
+	EmploymentType           string `json:"employmentType,omitempty"`
+	JobURL                   string `json:"jobUrl"`
+	MetadataJSON             string `json:"metadataJson"`
+	RawJSON                  string `json:"rawJson"`
+	SearchText               string `json:"searchText"`
+	NormalizedLocation       string `json:"normalizedLocation"`
+	IsRemote                 bool   `json:"isRemote"`
+	NormalizedEmploymentType string `json:"normalizedEmploymentType"`
+	Seniority                string `json:"seniority"`
+	MinYearsExperience       *int   `json:"minYearsExperience,omitempty"`
+	MaxYearsExperience       *int   `json:"maxYearsExperience,omitempty"`
+	ExperienceConfidence     string `json:"experienceConfidence"`
+	FirstSeenAt              string `json:"firstSeenAt"`
+	LastSeenAt               string `json:"lastSeenAt"`
+	MatchedAt                string `json:"matchedAt,omitempty"`
+	IsActive                 bool   `json:"isActive"`
 }
 
 type SyncJobsResult struct {
@@ -48,6 +57,7 @@ func (s *Store) SyncJobs(ctx context.Context, watchTargetID int64, jobs []provid
 	newJobsCount := 0
 	incomingIDs := make([]string, 0, len(jobs))
 	for _, job := range jobs {
+		jobSignals := signals.Derive(job)
 		incomingIDs = append(incomingIDs, job.ExternalJobID)
 		if _, exists := existingIDs[job.ExternalJobID]; !exists {
 			newJobsCount++
@@ -65,10 +75,18 @@ func (s *Store) SyncJobs(ctx context.Context, watchTargetID int64, jobs []provid
 				job_url,
 				metadata_json,
 				raw_json,
+				search_text,
+				normalized_location,
+				is_remote,
+				normalized_employment_type,
+				seniority,
+				min_years_experience,
+				max_years_experience,
+				experience_confidence,
 				matched_at,
 				last_seen_at,
 				is_active
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1)
 			ON CONFLICT(watch_target_id, external_job_id) DO UPDATE SET
 				title = excluded.title,
 				location = excluded.location,
@@ -78,10 +96,18 @@ func (s *Store) SyncJobs(ctx context.Context, watchTargetID int64, jobs []provid
 				job_url = excluded.job_url,
 				metadata_json = excluded.metadata_json,
 				raw_json = excluded.raw_json,
+				search_text = excluded.search_text,
+				normalized_location = excluded.normalized_location,
+				is_remote = excluded.is_remote,
+				normalized_employment_type = excluded.normalized_employment_type,
+				seniority = excluded.seniority,
+				min_years_experience = excluded.min_years_experience,
+				max_years_experience = excluded.max_years_experience,
+				experience_confidence = excluded.experience_confidence,
 				last_seen_at = CURRENT_TIMESTAMP,
 				matched_at = CURRENT_TIMESTAMP,
 				is_active = 1
-		`, watchTargetID, job.ExternalJobID, job.Title, job.Location, job.Department, job.Team, job.EmploymentType, job.JobURL, defaultJSON(job.MetadataJSON), job.RawJSON); err != nil {
+		`, watchTargetID, job.ExternalJobID, job.Title, job.Location, job.Department, job.Team, job.EmploymentType, job.JobURL, defaultJSON(job.MetadataJSON), job.RawJSON, jobSignals.SearchText, jobSignals.NormalizedLocation, boolToInt(jobSignals.IsRemote), jobSignals.NormalizedEmploymentType, jobSignals.Seniority, nullableInt(jobSignals.MinYearsExperience), nullableInt(jobSignals.MaxYearsExperience), jobSignals.ExperienceConfidence); err != nil {
 			_ = tx.Rollback()
 			return SyncJobsResult{}, fmt.Errorf("upsert synced job %q: %w", job.ExternalJobID, err)
 		}
@@ -139,6 +165,14 @@ func (s *Store) ListJobsByWatchTarget(ctx context.Context, watchTargetID int64) 
 			job_url,
 			metadata_json,
 			raw_json,
+			search_text,
+			normalized_location,
+			is_remote,
+			normalized_employment_type,
+			seniority,
+			min_years_experience,
+			max_years_experience,
+			experience_confidence,
 			first_seen_at,
 			last_seen_at,
 			COALESCE(matched_at, ''),
@@ -218,6 +252,9 @@ func buildDeactivateMissingJobsQuery(watchTargetID int64, incomingIDs []string) 
 func scanJobRecord(row scanner) (JobRecord, error) {
 	var job JobRecord
 	var isActive int
+	var isRemote int
+	var minYearsExperience sql.NullInt64
+	var maxYearsExperience sql.NullInt64
 	if err := row.Scan(
 		&job.ID,
 		&job.WatchTargetID,
@@ -230,6 +267,14 @@ func scanJobRecord(row scanner) (JobRecord, error) {
 		&job.JobURL,
 		&job.MetadataJSON,
 		&job.RawJSON,
+		&job.SearchText,
+		&job.NormalizedLocation,
+		&isRemote,
+		&job.NormalizedEmploymentType,
+		&job.Seniority,
+		&minYearsExperience,
+		&maxYearsExperience,
+		&job.ExperienceConfidence,
 		&job.FirstSeenAt,
 		&job.LastSeenAt,
 		&job.MatchedAt,
@@ -239,6 +284,9 @@ func scanJobRecord(row scanner) (JobRecord, error) {
 	}
 
 	job.IsActive = isActive == 1
+	job.IsRemote = isRemote == 1
+	job.MinYearsExperience = nullInt64ToPtr(minYearsExperience)
+	job.MaxYearsExperience = nullInt64ToPtr(maxYearsExperience)
 	return job, nil
 }
 
@@ -247,4 +295,27 @@ func defaultJSON(value string) string {
 		return "{}"
 	}
 	return value
+}
+
+func boolToInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+func nullableInt(value *int) any {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func nullInt64ToPtr(value sql.NullInt64) *int {
+	if !value.Valid {
+		return nil
+	}
+
+	converted := int(value.Int64)
+	return &converted
 }

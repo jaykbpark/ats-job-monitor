@@ -89,6 +89,14 @@ func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 		t.Fatalf("expected 1 persisted job, got %d", len(jobs))
 	}
 
+	if jobs[0].SearchText == "" {
+		t.Fatal("expected derived search text to be persisted")
+	}
+
+	if jobs[0].NormalizedEmploymentType != "unknown" {
+		t.Fatalf("unexpected normalized employment type: %q", jobs[0].NormalizedEmploymentType)
+	}
+
 	runs, err := dbStore.ListSyncRunsByWatchTarget(ctx, target.ID)
 	if err != nil {
 		t.Fatalf("list sync runs: %v", err)
@@ -152,6 +160,10 @@ func TestSyncWatchTargetSupportsLever(t *testing.T) {
 	if jobs[0].EmploymentType != "Full-time" {
 		t.Fatalf("unexpected employment type: %q", jobs[0].EmploymentType)
 	}
+
+	if jobs[0].NormalizedEmploymentType != "full-time" {
+		t.Fatalf("unexpected normalized employment type: %q", jobs[0].NormalizedEmploymentType)
+	}
 }
 
 func TestSyncWatchTargetSupportsAshby(t *testing.T) {
@@ -207,6 +219,10 @@ func TestSyncWatchTargetSupportsAshby(t *testing.T) {
 
 	if jobs[0].Team != "Platform" {
 		t.Fatalf("unexpected team: %q", jobs[0].Team)
+	}
+
+	if jobs[0].Seniority != "unknown" {
+		t.Fatalf("unexpected seniority: %q", jobs[0].Seniority)
 	}
 }
 

@@ -22,12 +22,16 @@ func TestMigrateAppliesEmbeddedSQLFiles(t *testing.T) {
 		t.Fatalf("failed to read applied migrations: %v", err)
 	}
 
-	if len(records) != 1 {
-		t.Fatalf("expected 1 applied migration, got %d", len(records))
+	if len(records) != 2 {
+		t.Fatalf("expected 2 applied migrations, got %d", len(records))
 	}
 
 	if records[0].Version != "0001_init.sql" {
 		t.Fatalf("unexpected migration version: %q", records[0].Version)
+	}
+
+	if records[1].Version != "0002_job_signals.sql" {
+		t.Fatalf("unexpected second migration version: %q", records[1].Version)
 	}
 
 	if err := store.Migrate(ctx); err != nil {

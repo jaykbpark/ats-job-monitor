@@ -85,6 +85,8 @@ For the first version, filters should be stored as JSON on `watch_targets`. That
 
 The JSON payload is now treated as a typed hard-filter schema in application code rather than an unstructured blob.
 
+Derived job signals are now persisted separately from raw ATS payloads so the hard-match engine can evaluate normalized fields consistently across providers.
+
 ## Runtime Flow
 
 ### Add Watch
