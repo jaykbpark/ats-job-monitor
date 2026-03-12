@@ -44,6 +44,9 @@ Current skeleton endpoints:
 - `GET /api/companies`
 - `GET /api/watch-targets`
 - `POST /api/watch-targets`
+- `POST /api/watch-targets/{id}/sync`
+- `GET /api/watch-targets/{id}/jobs`
+- `GET /api/watch-targets/{id}/sync-runs`
 
 ### Worker
 
@@ -64,6 +67,8 @@ Each ATS gets its own adapter:
 - Ashby
 
 Every adapter should return the same internal job shape so filtering and diffing stay provider-agnostic.
+
+Greenhouse is the first provider wired end to end.
 
 ## Data Model
 

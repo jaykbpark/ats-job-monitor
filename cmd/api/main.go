@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jaykbpark/ats-job-monitor/internal/api"
+	"github.com/jaykbpark/ats-job-monitor/internal/monitor"
 	"github.com/jaykbpark/ats-job-monitor/internal/store"
 )
 
@@ -30,7 +31,7 @@ func main() {
 		fatalf("apply migrations: %v", err)
 	}
 
-	server := api.NewServer(dbStore)
+	server := api.NewServer(dbStore, monitor.NewService(dbStore, nil))
 	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           server.Handler(),

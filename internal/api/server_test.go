@@ -9,8 +9,19 @@ import (
 	"path/filepath"
 	"testing"
 
+	monitorpkg "github.com/jaykbpark/ats-job-monitor/internal/monitor"
+	"github.com/jaykbpark/ats-job-monitor/internal/providers"
 	"github.com/jaykbpark/ats-job-monitor/internal/store"
 )
+
+type fakeGreenhouseFetcher struct {
+	jobs []providers.Job
+	err  error
+}
+
+func (f *fakeGreenhouseFetcher) FetchJobs(ctx context.Context, boardKey string) ([]providers.Job, error) {
+	return f.jobs, f.err
+}
 
 func TestHealthEndpoint(t *testing.T) {
 	server := newTestServer(t)
@@ -118,6 +129,54 @@ func TestCreateWatchTargetRejectsInvalidFiltersJSON(t *testing.T) {
 	}
 }
 
+func TestSyncWatchTargetAndListJobs(t *testing.T) {
+	server := newTestServer(t)
+
+	createWatchTargetForTest(t, server)
+
+	syncReq := httptest.NewRequest(http.MethodPost, "/api/watch-targets/1/sync", nil)
+	syncRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(syncRecorder, syncReq)
+
+	if syncRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from sync, got %d: %s", syncRecorder.Code, syncRecorder.Body.String())
+	}
+
+	jobsReq := httptest.NewRequest(http.MethodGet, "/api/watch-targets/1/jobs", nil)
+	jobsRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(jobsRecorder, jobsReq)
+
+	if jobsRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from jobs list, got %d", jobsRecorder.Code)
+	}
+
+	var jobs []map[string]any
+	if err := json.Unmarshal(jobsRecorder.Body.Bytes(), &jobs); err != nil {
+		t.Fatalf("decode jobs response: %v", err)
+	}
+
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 synced job, got %d", len(jobs))
+	}
+
+	runsReq := httptest.NewRequest(http.MethodGet, "/api/watch-targets/1/sync-runs", nil)
+	runsRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(runsRecorder, runsReq)
+
+	if runsRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from sync-runs list, got %d", runsRecorder.Code)
+	}
+
+	var runs []map[string]any
+	if err := json.Unmarshal(runsRecorder.Body.Bytes(), &runs); err != nil {
+		t.Fatalf("decode sync-runs response: %v", err)
+	}
+
+	if len(runs) != 1 {
+		t.Fatalf("expected 1 sync run, got %d", len(runs))
+	}
+}
+
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 
@@ -135,5 +194,37 @@ func newTestServer(t *testing.T) *Server {
 		t.Fatalf("migrate store: %v", err)
 	}
 
-	return NewServer(dbStore)
+	return NewServer(dbStore, monitorpkg.NewService(dbStore, &fakeGreenhouseFetcher{
+		jobs: []providers.Job{
+			{
+				ExternalJobID: "42",
+				Title:         "Backend Engineer",
+				Location:      "Remote",
+				Department:    "Engineering",
+				JobURL:        "https://job-boards.greenhouse.io/greenhouse/jobs/42",
+				MetadataJSON:  `{"team":"Platform"}`,
+				RawJSON:       `{"id":42}`,
+			},
+		},
+	}))
+}
+
+func createWatchTargetForTest(t *testing.T, server *Server) {
+	t.Helper()
+
+	body := []byte(`{
+	  "name": "Greenhouse",
+	  "provider": "greenhouse",
+	  "boardKey": "greenhouse",
+	  "sourceUrl": "https://job-boards.greenhouse.io/greenhouse"
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-targets", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("expected 201 from watch target creation, got %d: %s", recorder.Code, recorder.Body.String())
+	}
 }

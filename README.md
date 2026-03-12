@@ -54,6 +54,7 @@ The repo now contains:
 - a Go ATS identifier parser
 - an embedded seed catalog
 - a runnable Go API skeleton
+- a Greenhouse-backed sync path from API trigger to stored jobs
 - a developer CLI for testing ATS resolution
 - a SQLite store package with versioned migrations
 
@@ -95,3 +96,6 @@ The API currently serves:
 - `GET /api/companies`
 - `GET /api/watch-targets`
 - `POST /api/watch-targets`
+- `POST /api/watch-targets/{id}/sync`
+- `GET /api/watch-targets/{id}/jobs`
+- `GET /api/watch-targets/{id}/sync-runs`

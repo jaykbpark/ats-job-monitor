@@ -6,16 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jaykbpark/ats-job-monitor/internal/catalog"
+	monitorpkg "github.com/jaykbpark/ats-job-monitor/internal/monitor"
 	"github.com/jaykbpark/ats-job-monitor/internal/store"
 )
 
 type Server struct {
-	store *store.Store
-	mux   *http.ServeMux
+	store   *store.Store
+	monitor *monitorpkg.Service
+	mux     *http.ServeMux
 }
 
 type createWatchTargetRequest struct {
@@ -28,10 +31,15 @@ type createWatchTargetRequest struct {
 	Status     string `json:"status"`
 }
 
-func NewServer(store *store.Store) *Server {
+func NewServer(store *store.Store, syncService *monitorpkg.Service) *Server {
+	if syncService == nil {
+		syncService = monitorpkg.NewService(store, nil)
+	}
+
 	server := &Server{
-		store: store,
-		mux:   http.NewServeMux(),
+		store:   store,
+		monitor: syncService,
+		mux:     http.NewServeMux(),
 	}
 
 	server.routes()
@@ -47,6 +55,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/companies", s.handleListCompanies)
 	s.mux.HandleFunc("GET /api/watch-targets", s.handleListWatchTargets)
 	s.mux.HandleFunc("POST /api/watch-targets", s.handleCreateWatchTarget)
+	s.mux.HandleFunc("POST /api/watch-targets/{id}/sync", s.handleSyncWatchTarget)
+	s.mux.HandleFunc("GET /api/watch-targets/{id}/jobs", s.handleListWatchTargetJobs)
+	s.mux.HandleFunc("GET /api/watch-targets/{id}/sync-runs", s.handleListWatchTargetSyncRuns)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -104,6 +115,55 @@ func (s *Server) handleCreateWatchTarget(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusCreated, target)
 }
 
+func (s *Server) handleSyncWatchTarget(w http.ResponseWriter, r *http.Request) {
+	watchTargetID, ok := parseWatchTargetID(w, r)
+	if !ok {
+		return
+	}
+
+	run, err := s.monitor.SyncWatchTarget(r.Context(), watchTargetID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not supported") {
+			status = http.StatusBadRequest
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, run)
+}
+
+func (s *Server) handleListWatchTargetJobs(w http.ResponseWriter, r *http.Request) {
+	watchTargetID, ok := parseWatchTargetID(w, r)
+	if !ok {
+		return
+	}
+
+	jobs, err := s.store.ListJobsByWatchTarget(r.Context(), watchTargetID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("list watch target jobs: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jobs)
+}
+
+func (s *Server) handleListWatchTargetSyncRuns(w http.ResponseWriter, r *http.Request) {
+	watchTargetID, ok := parseWatchTargetID(w, r)
+	if !ok {
+		return
+	}
+
+	runs, err := s.store.ListSyncRunsByWatchTarget(r.Context(), watchTargetID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("list sync runs: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, runs)
+}
+
 func normalizeFilters(req createWatchTargetRequest) (string, error) {
 	if strings.TrimSpace(req.FiltersRaw) != "" && req.Filters != nil {
 		return "", errors.New("provide either filters or filtersJson, not both")
@@ -146,6 +206,22 @@ func writeError(w http.ResponseWriter, statusCode int, message string) {
 func isValidationError(err error) bool {
 	message := err.Error()
 	return strings.Contains(message, "required")
+}
+
+func parseWatchTargetID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	rawID := strings.TrimSpace(r.PathValue("id"))
+	if rawID == "" {
+		writeError(w, http.StatusBadRequest, "watch target id is required")
+		return 0, false
+	}
+
+	id, err := strconv.ParseInt(rawID, 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, "watch target id must be a positive integer")
+		return 0, false
+	}
+
+	return id, true
 }
 
 func withLogging(next http.Handler) http.Handler {
