@@ -40,13 +40,14 @@ func Derive(job providers.Job) JobSignals {
 	searchText := normalizeText(rawSearchSource)
 	normalizedLocation := normalizeText(job.Location)
 	minYears, maxYears, experienceConfidence := deriveExperience(rawSearchSource)
+	titleText := normalizeText(job.Title)
 
 	return JobSignals{
 		SearchText:               searchText,
 		NormalizedLocation:       normalizedLocation,
 		IsRemote:                 deriveIsRemote(job.Location, job.MetadataJSON, job.RawJSON),
 		NormalizedEmploymentType: normalizeEmploymentType(job.EmploymentType),
-		Seniority:                deriveSeniority(searchText),
+		Seniority:                deriveSeniority(titleText),
 		MinYearsExperience:       minYears,
 		MaxYearsExperience:       maxYears,
 		ExperienceConfidence:     experienceConfidence,
@@ -242,7 +243,7 @@ func normalizeEmploymentType(value string) string {
 	}
 }
 
-func deriveSeniority(searchText string) string {
+func deriveSeniority(titleText string) string {
 	type pattern struct {
 		regex *regexp.Regexp
 		value string
@@ -253,6 +254,7 @@ func deriveSeniority(searchText string) string {
 		{regexp.MustCompile(`\bstaff\b`), "staff"},
 		{regexp.MustCompile(`\bdirector\b|\bhead of\b|\bvp\b`), "director"},
 		{regexp.MustCompile(`\bmanager\b`), "manager"},
+		{regexp.MustCompile(`\blead\b`), "senior"},
 		{regexp.MustCompile(`\bsenior\b|\bsr\b`), "senior"},
 		{regexp.MustCompile(`\bjunior\b|\bjr\b|\bassociate\b`), "junior"},
 		{regexp.MustCompile(`\bintern\b|\binternship\b`), "intern"},
@@ -261,7 +263,7 @@ func deriveSeniority(searchText string) string {
 	}
 
 	for _, candidate := range patterns {
-		if candidate.regex.MatchString(searchText) {
+		if candidate.regex.MatchString(titleText) {
 			return candidate.value
 		}
 	}

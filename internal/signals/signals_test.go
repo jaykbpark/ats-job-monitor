@@ -149,67 +149,72 @@ func TestNormalizeEmploymentType(t *testing.T) {
 
 func TestDeriveSeniority(t *testing.T) {
 	tests := []struct {
-		name       string
-		searchText string
-		want       string
+		name      string
+		titleText string
+		want      string
 	}{
 		{
-			name:       "principal role",
-			searchText: "principal software engineer",
-			want:       "principal",
+			name:      "principal role",
+			titleText: "principal software engineer",
+			want:      "principal",
 		},
 		{
-			name:       "staff role",
-			searchText: "staff platform engineer",
-			want:       "staff",
+			name:      "staff role",
+			titleText: "staff platform engineer",
+			want:      "staff",
 		},
 		{
-			name:       "director role",
-			searchText: "director of engineering",
-			want:       "director",
+			name:      "director role",
+			titleText: "director of engineering",
+			want:      "director",
 		},
 		{
-			name:       "manager role",
-			searchText: "engineering manager",
-			want:       "manager",
+			name:      "manager role",
+			titleText: "engineering manager",
+			want:      "manager",
 		},
 		{
-			name:       "senior role",
-			searchText: "senior backend engineer",
-			want:       "senior",
+			name:      "lead role maps to senior",
+			titleText: "lead software engineer",
+			want:      "senior",
 		},
 		{
-			name:       "junior role",
-			searchText: "associate software engineer",
-			want:       "junior",
+			name:      "senior role",
+			titleText: "senior backend engineer",
+			want:      "senior",
 		},
 		{
-			name:       "intern role",
-			searchText: "software engineering intern",
-			want:       "intern",
+			name:      "junior role",
+			titleText: "associate software engineer",
+			want:      "junior",
 		},
 		{
-			name:       "entry role",
-			searchText: "new grad software engineer",
-			want:       "entry",
+			name:      "intern role",
+			titleText: "software engineering intern",
+			want:      "intern",
 		},
 		{
-			name:       "mid role",
-			searchText: "mid level backend engineer",
-			want:       "mid",
+			name:      "entry role",
+			titleText: "new grad software engineer",
+			want:      "entry",
 		},
 		{
-			name:       "unknown role",
-			searchText: "backend engineer",
-			want:       "unknown",
+			name:      "mid role",
+			titleText: "mid level backend engineer",
+			want:      "mid",
+		},
+		{
+			name:      "unknown role",
+			titleText: "backend engineer",
+			want:      "unknown",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := deriveSeniority(tt.searchText)
+			got := deriveSeniority(tt.titleText)
 			if got != tt.want {
-				t.Fatalf("deriveSeniority(%q) = %q, want %q", tt.searchText, got, tt.want)
+				t.Fatalf("deriveSeniority(%q) = %q, want %q", tt.titleText, got, tt.want)
 			}
 		})
 	}
@@ -307,6 +312,72 @@ func TestDerive(t *testing.T) {
 
 	if got.ExperienceConfidence != "high" {
 		t.Fatalf("unexpected experience confidence: %q", got.ExperienceConfidence)
+	}
+}
+
+func TestDeriveSeniorityPrefersTitleOverBodyText(t *testing.T) {
+	tests := []struct {
+		name      string
+		job       providers.Job
+		wantLevel string
+	}{
+		{
+			name: "manager title does not become staff from body text",
+			job: providers.Job{
+				Title:   "Manager, Software Engineering - Billing",
+				RawJSON: `{"content":"manage, support, and develop a team of engineers, including staff level engineers"}`,
+			},
+			wantLevel: "manager",
+		},
+		{
+			name: "engineering manager does not become principal from body text",
+			job: providers.Job{
+				Title:   "Engineering Manager, CDN",
+				RawJSON: `{"content":"this is a manager role, not a principal ic role"}`,
+			},
+			wantLevel: "manager",
+		},
+		{
+			name: "director title does not become staff from chief of staff text",
+			job: providers.Job{
+				Title:   "Director, Engineering Operations",
+				RawJSON: `{"content":"reporting to the chief of staff to the cto"}`,
+			},
+			wantLevel: "director",
+		},
+		{
+			name: "senior title does not become director from head of engineering text",
+			job: providers.Job{
+				Title:   "Senior Full Stack Software Engineer",
+				RawJSON: `{"descriptionPlain":"you will work closely with our head of engineering"}`,
+			},
+			wantLevel: "senior",
+		},
+		{
+			name: "neutral title does not become staff from manual staff work text",
+			job: providers.Job{
+				Title:   "AI Engineer (Agentic/LLMs)",
+				RawJSON: `{"descriptionPlain":"building an ai native system that replaces manual staff work with intelligent explainable automation"}`,
+			},
+			wantLevel: "unknown",
+		},
+		{
+			name: "lead title does not become junior from mentor text",
+			job: providers.Job{
+				Title:   "Lead Software Engineer",
+				RawJSON: `{"descriptionPlain":"they will coach and mentor junior engineers and drive engineering best practices"}`,
+			},
+			wantLevel: "senior",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Derive(tt.job)
+			if got.Seniority != tt.wantLevel {
+				t.Fatalf("Derive(%q).Seniority = %q, want %q", tt.job.Title, got.Seniority, tt.wantLevel)
+			}
+		})
 	}
 }
 
