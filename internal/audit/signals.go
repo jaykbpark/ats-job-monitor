@@ -314,16 +314,56 @@ func isEngineeringJob(job providers.Job) bool {
 	title := normalizeForMatch(job.Title)
 	scope := normalizeForMatch(strings.Join([]string{job.Title, job.Department, job.Team}, " "))
 
+	scopeExclusions := []string{
+		"go to market",
+		"gtm",
+		"sales",
+		"success",
+		"enablement",
+		"business operations",
+		"corporate development",
+		"customer delivery",
+		"technical program management",
+		"program management",
+		"operations",
+	}
+
+	for _, candidate := range scopeExclusions {
+		if strings.Contains(scope, candidate) {
+			return false
+		}
+	}
+
 	excludedTitles := []string{
 		"sales engineer",
 		"solutions engineer",
+		"solution engineer",
+		"solutions architect",
+		"solution architect",
+		"pre sales",
 		"support engineer",
 		"customer engineer",
 		"forward deployed engineer",
 		"developer advocacy",
+		"developer success",
 		"account executive",
 		"account manager",
 		"customer success",
+		"customer delivery",
+		"technical program manager",
+		"program manager",
+		"project manager",
+		"product manager",
+		"operations lead",
+		"ops lead",
+		"engineering operations",
+		"enablement",
+		"it engineer",
+		"information technology",
+		"systems engineer",
+		"systems administrator",
+		"support",
+		"implementation engineer",
 		"recruiter",
 		"sourcer",
 		"designer",
@@ -360,7 +400,8 @@ func isEngineeringJob(job providers.Job) bool {
 		"machine learning",
 		"firmware",
 		"embedded",
-		"architect",
+		"lead software engineer",
+		"software lead",
 	}
 
 	for _, candidate := range titleKeywords {
@@ -375,7 +416,6 @@ func isEngineeringJob(job providers.Job) bool {
 			"director",
 			"lead",
 			"head",
-			"scientist",
 		}
 		for _, candidate := range leadershipKeywords {
 			if strings.Contains(title, candidate) {
