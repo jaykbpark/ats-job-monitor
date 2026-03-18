@@ -114,12 +114,13 @@ The API currently serves:
 - `GET /api/companies`
 - `GET /api/watch-targets`
 - `POST /api/watch-targets`
+- `PATCH /api/watch-targets/{id}`
 - `POST /api/watch-targets/{id}/sync`
 - `GET /api/watch-targets/{id}/jobs`
 - `GET /api/watch-targets/{id}/sync-runs`
 - `GET /api/watch-targets/{id}/notifications`
 
-`POST /api/watch-targets` accepts an optional `notificationEmail` field. When present, newly matched jobs for that target are queued for `email` delivery instead of the default `inbox` channel.
+`POST /api/watch-targets` accepts an optional `notificationEmail` field, and `PATCH /api/watch-targets/{id}` can update or clear it later. When present, newly matched jobs for that target are queued for `email` delivery instead of the default `inbox` channel.
 
 Deliver pending notifications from the worker CLI:
 

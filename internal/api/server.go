@@ -33,6 +33,15 @@ type createWatchTargetRequest struct {
 	Status            string `json:"status"`
 }
 
+type updateWatchTargetRequest struct {
+	Name              *string         `json:"name"`
+	SourceURL         *string         `json:"sourceUrl"`
+	NotificationEmail *string         `json:"notificationEmail"`
+	Filters           json.RawMessage `json:"filters"`
+	FiltersRaw        *string         `json:"filtersJson"`
+	Status            *string         `json:"status"`
+}
+
 func NewServer(store *store.Store, syncService *monitorpkg.Service) *Server {
 	if syncService == nil {
 		syncService = monitorpkg.NewService(store, nil, nil, nil)
@@ -57,6 +66,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/companies", s.handleListCompanies)
 	s.mux.HandleFunc("GET /api/watch-targets", s.handleListWatchTargets)
 	s.mux.HandleFunc("POST /api/watch-targets", s.handleCreateWatchTarget)
+	s.mux.HandleFunc("PATCH /api/watch-targets/{id}", s.handleUpdateWatchTarget)
 	s.mux.HandleFunc("POST /api/watch-targets/{id}/sync", s.handleSyncWatchTarget)
 	s.mux.HandleFunc("GET /api/watch-targets/{id}/jobs", s.handleListWatchTargetJobs)
 	s.mux.HandleFunc("GET /api/watch-targets/{id}/sync-runs", s.handleListWatchTargetSyncRuns)
@@ -117,6 +127,46 @@ func (s *Server) handleCreateWatchTarget(w http.ResponseWriter, r *http.Request)
 	}
 
 	writeJSON(w, http.StatusCreated, target)
+}
+
+func (s *Server) handleUpdateWatchTarget(w http.ResponseWriter, r *http.Request) {
+	watchTargetID, ok := parseWatchTargetID(w, r)
+	if !ok {
+		return
+	}
+
+	var req updateWatchTargetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	filtersJSON, err := normalizeUpdateFilters(req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	target, err := s.store.UpdateWatchTarget(r.Context(), store.UpdateWatchTargetParams{
+		ID:                watchTargetID,
+		Name:              req.Name,
+		SourceURL:         req.SourceURL,
+		NotificationEmail: req.NotificationEmail,
+		FiltersJSON:       filtersJSON,
+		Status:            req.Status,
+	})
+	if err != nil {
+		status := http.StatusInternalServerError
+		if isValidationError(err) {
+			status = http.StatusBadRequest
+		} else if strings.Contains(err.Error(), "no rows") {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, target)
 }
 
 func (s *Server) handleSyncWatchTarget(w http.ResponseWriter, r *http.Request) {
@@ -221,6 +271,36 @@ func normalizeFilters(req createWatchTargetRequest) (string, error) {
 	}
 
 	return normalizedJSON, nil
+}
+
+func normalizeUpdateFilters(req updateWatchTargetRequest) (*string, error) {
+	if req.FiltersRaw != nil && req.Filters != nil {
+		return nil, errors.New("provide either filters or filtersJson, not both")
+	}
+
+	if req.FiltersRaw != nil {
+		normalizedJSON, _, err := filters.NormalizeHardFiltersJSON(strings.TrimSpace(*req.FiltersRaw))
+		if err != nil {
+			return nil, fmt.Errorf("filtersJson is invalid: %w", err)
+		}
+		return &normalizedJSON, nil
+	}
+
+	if req.Filters == nil {
+		return nil, nil
+	}
+
+	if string(req.Filters) == "null" {
+		normalizedJSON, _, err := filters.NormalizeHardFiltersJSON(`{}`)
+		return &normalizedJSON, err
+	}
+
+	normalizedJSON, _, err := filters.NormalizeHardFiltersJSON(string(req.Filters))
+	if err != nil {
+		return nil, fmt.Errorf("filters are invalid: %w", err)
+	}
+
+	return &normalizedJSON, nil
 }
 
 func writeJSON(w http.ResponseWriter, statusCode int, value any) {

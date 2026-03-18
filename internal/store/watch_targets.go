@@ -35,6 +35,15 @@ type CreateWatchTargetParams struct {
 	Status            string
 }
 
+type UpdateWatchTargetParams struct {
+	ID                int64
+	Name              *string
+	SourceURL         *string
+	NotificationEmail *string
+	FiltersJSON       *string
+	Status            *string
+}
+
 func (s *Store) CreateWatchTarget(ctx context.Context, params CreateWatchTargetParams) (WatchTarget, error) {
 	name := strings.TrimSpace(params.Name)
 	if name == "" {
@@ -112,6 +121,71 @@ func (s *Store) GetWatchTarget(ctx context.Context, id int64) (WatchTarget, erro
 	}
 
 	return target, nil
+}
+
+func (s *Store) UpdateWatchTarget(ctx context.Context, params UpdateWatchTargetParams) (WatchTarget, error) {
+	target, err := s.GetWatchTarget(ctx, params.ID)
+	if err != nil {
+		return WatchTarget{}, err
+	}
+
+	name := target.Name
+	if params.Name != nil {
+		name = strings.TrimSpace(*params.Name)
+		if name == "" {
+			return WatchTarget{}, fmt.Errorf("watch target name is required")
+		}
+	}
+
+	sourceURL := target.SourceURL
+	if params.SourceURL != nil {
+		sourceURL = strings.TrimSpace(*params.SourceURL)
+	}
+
+	notificationEmail := target.NotificationEmail
+	if params.NotificationEmail != nil {
+		notificationEmail, err = normalizeNotificationEmail(*params.NotificationEmail)
+		if err != nil {
+			return WatchTarget{}, err
+		}
+	}
+
+	filtersJSON := target.FiltersJSON
+	if params.FiltersJSON != nil {
+		filtersJSON = strings.TrimSpace(*params.FiltersJSON)
+		if filtersJSON == "" {
+			filtersJSON = "{}"
+		}
+
+		normalizedFiltersJSON, _, err := filters.NormalizeHardFiltersJSON(filtersJSON)
+		if err != nil {
+			return WatchTarget{}, fmt.Errorf("invalid hard filters: %w", err)
+		}
+		filtersJSON = normalizedFiltersJSON
+	}
+
+	status := target.Status
+	if params.Status != nil {
+		status = strings.TrimSpace(*params.Status)
+		if status == "" {
+			return WatchTarget{}, fmt.Errorf("watch target status is required")
+		}
+	}
+
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE watch_targets
+		SET name = ?,
+			source_url = NULLIF(?, ''),
+			notification_email = NULLIF(?, ''),
+			filters_json = ?,
+			status = ?,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, name, sourceURL, notificationEmail, filtersJSON, status, params.ID); err != nil {
+		return WatchTarget{}, fmt.Errorf("update watch target %d: %w", params.ID, err)
+	}
+
+	return s.GetWatchTarget(ctx, params.ID)
 }
 
 func (s *Store) ListWatchTargets(ctx context.Context) ([]WatchTarget, error) {

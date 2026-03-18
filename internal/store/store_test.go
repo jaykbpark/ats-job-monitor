@@ -152,6 +152,69 @@ func TestCreateWatchTargetRejectsInvalidFilters(t *testing.T) {
 	}
 }
 
+func TestUpdateWatchTarget(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t)
+	defer func() {
+		_ = store.Close()
+	}()
+
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatalf("migrate failed: %v", err)
+	}
+
+	target, err := store.CreateWatchTarget(ctx, CreateWatchTargetParams{
+		Name:              "Greenhouse",
+		Provider:          "greenhouse",
+		BoardKey:          "greenhouse",
+		SourceURL:         "https://job-boards.greenhouse.io/greenhouse",
+		NotificationEmail: "jobs@example.com",
+		FiltersJSON:       `{"includeKeywordsAny":["platform"]}`,
+		Status:            "active",
+	})
+	if err != nil {
+		t.Fatalf("create watch target failed: %v", err)
+	}
+
+	updatedName := "Greenhouse Backend"
+	updatedSourceURL := ""
+	updatedEmail := ""
+	updatedFilters := `{"includeKeywordsAny":["backend"],"remoteOnly":true}`
+	updatedStatus := "paused"
+
+	updated, err := store.UpdateWatchTarget(ctx, UpdateWatchTargetParams{
+		ID:                target.ID,
+		Name:              &updatedName,
+		SourceURL:         &updatedSourceURL,
+		NotificationEmail: &updatedEmail,
+		FiltersJSON:       &updatedFilters,
+		Status:            &updatedStatus,
+	})
+	if err != nil {
+		t.Fatalf("update watch target failed: %v", err)
+	}
+
+	if updated.Name != "Greenhouse Backend" {
+		t.Fatalf("unexpected updated name: %q", updated.Name)
+	}
+
+	if updated.SourceURL != "" {
+		t.Fatalf("expected source URL to be cleared, got %q", updated.SourceURL)
+	}
+
+	if updated.NotificationEmail != "" {
+		t.Fatalf("expected notification email to be cleared, got %q", updated.NotificationEmail)
+	}
+
+	if updated.Status != "paused" {
+		t.Fatalf("unexpected updated status: %q", updated.Status)
+	}
+
+	if !updated.Filters.RemoteOnly || len(updated.Filters.IncludeKeywordsAny) != 1 || updated.Filters.IncludeKeywordsAny[0] != "backend" {
+		t.Fatalf("unexpected updated filters: %#v", updated.Filters)
+	}
+}
+
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
 

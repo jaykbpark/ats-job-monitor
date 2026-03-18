@@ -234,6 +234,99 @@ func TestCreateWatchTargetReturnsTypedFilters(t *testing.T) {
 	}
 }
 
+func TestUpdateWatchTargetEndpoint(t *testing.T) {
+	server := newTestServer(t)
+
+	createBody := []byte(`{
+	  "name": "Greenhouse",
+	  "provider": "greenhouse",
+	  "boardKey": "greenhouse",
+	  "sourceUrl": "https://job-boards.greenhouse.io/greenhouse",
+	  "notificationEmail": "jobs@example.com",
+	  "filters": {
+	    "includeKeywordsAny": ["platform"]
+	  }
+	}`)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/watch-targets", bytes.NewReader(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	createRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(createRecorder, createReq)
+
+	if createRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", createRecorder.Code, createRecorder.Body.String())
+	}
+
+	updateBody := []byte(`{
+	  "name": "Greenhouse Backend",
+	  "sourceUrl": "",
+	  "notificationEmail": "",
+	  "status": "paused",
+	  "filters": {
+	    "includeKeywordsAny": ["backend"],
+	    "remoteOnly": true
+	  }
+	}`)
+
+	updateReq := httptest.NewRequest(http.MethodPatch, "/api/watch-targets/1", bytes.NewReader(updateBody))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(updateRecorder, updateReq)
+
+	if updateRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", updateRecorder.Code, updateRecorder.Body.String())
+	}
+
+	var updated map[string]any
+	if err := json.Unmarshal(updateRecorder.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("decode update response: %v", err)
+	}
+
+	if updated["name"] != "Greenhouse Backend" {
+		t.Fatalf("unexpected updated name: %#v", updated["name"])
+	}
+
+	if _, ok := updated["sourceUrl"]; ok {
+		t.Fatalf("expected sourceUrl to be omitted after clearing: %#v", updated["sourceUrl"])
+	}
+
+	if _, ok := updated["notificationEmail"]; ok {
+		t.Fatalf("expected notificationEmail to be omitted after clearing: %#v", updated["notificationEmail"])
+	}
+
+	if updated["status"] != "paused" {
+		t.Fatalf("unexpected updated status: %#v", updated["status"])
+	}
+
+	filters, ok := updated["filters"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected typed filters in update response, got %#v", updated["filters"])
+	}
+
+	if filters["remoteOnly"] != true {
+		t.Fatalf("expected remoteOnly=true, got %#v", filters["remoteOnly"])
+	}
+}
+
+func TestUpdateWatchTargetRejectsInvalidNotificationEmail(t *testing.T) {
+	server := newTestServer(t)
+
+	createWatchTargetForTest(t, server, `{}`)
+
+	updateBody := []byte(`{
+	  "notificationEmail": "not-an-email"
+	}`)
+
+	updateReq := httptest.NewRequest(http.MethodPatch, "/api/watch-targets/1", bytes.NewReader(updateBody))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(updateRecorder, updateReq)
+
+	if updateRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", updateRecorder.Code)
+	}
+}
+
 func TestSyncWatchTargetAndListJobs(t *testing.T) {
 	server := newTestServer(t)
 
