@@ -21,6 +21,33 @@ The current system is good enough to fetch and normalize jobs across providers, 
 
 The good news is that remote detection looked materially better in this pass. I did not find a strong backlog of remote misses in the 98 sampled jobs.
 
+## Status After Fixes
+
+The high-confidence fixes in this note have now been implemented:
+
+- Greenhouse employment type recovery from structured metadata and anchored content
+- tighter engineering-job audit sampling
+- title-first seniority derivation with explicit `lead` handling
+- more robust experience parsing from provider payload text
+
+Post-fix validation on March 18, 2026:
+
+- full live audit: 18 successful targets, 52 sampled jobs, 237 automatic checks, 0 automatic failures
+- sample-6 live audit: 18 successful targets, 97 sampled jobs, 450 automatic checks, 0 automatic failures
+
+Manual spot checks after the fixes covered:
+
+- Greenhouse: Figma `Manager, Software Engineering - Billing`
+- Lever: Level AI `Lead Software Engineer`
+- Lever: Tutor Intelligence `Robot Perception Engineer`
+- Ashby: OpenAI `Senior Software Engineer, Identity Platform`
+- Ashby: Ramp `Mobile Engineer, Android`
+
+Current interpretation:
+
+- the derivation layer is now stable enough to start promoting reviewed live cases into checked-in fixtures
+- remaining gaps are mostly acceptable `unknown` outcomes where the provider does not expose a strong structured signal
+
 ## High-Confidence Fixes
 
 ### 1. Make seniority title-first
