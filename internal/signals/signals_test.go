@@ -258,6 +258,12 @@ func TestDeriveExperience(t *testing.T) {
 			input:     "Strong experience with backend systems required",
 			wantLevel: "unknown",
 		},
+		{
+			name:      "provider payload with escaped newlines preserves plus expression",
+			input:     `{"descriptionPlain":"Who You Are\n3+ years of experience in perception, robotics, or a closely related engineering role"}`,
+			wantMin:   intPtr(3),
+			wantLevel: "high",
+		},
 	}
 
 	for _, tt := range tests {
@@ -271,6 +277,22 @@ func TestDeriveExperience(t *testing.T) {
 				t.Fatalf("deriveExperience(%q) confidence = %q, want %q", tt.input, gotLevel, tt.wantLevel)
 			}
 		})
+	}
+}
+
+func TestDeriveExperienceFromLeverPayload(t *testing.T) {
+	job := providers.Job{
+		Title:   "Robot Perception Engineer",
+		RawJSON: `{"descriptionPlain":"Who You Are\n3+ years of experience in perception, robotics, or a closely related engineering role"}`,
+	}
+
+	got := Derive(job)
+
+	assertIntPtrEqual(t, got.MinYearsExperience, intPtr(3), "min years")
+	assertIntPtrEqual(t, got.MaxYearsExperience, nil, "max years")
+
+	if got.ExperienceConfidence != "high" {
+		t.Fatalf("unexpected experience confidence: %q", got.ExperienceConfidence)
 	}
 }
 

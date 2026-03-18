@@ -3,6 +3,7 @@ package signals
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"regexp"
 	"strings"
 	"unicode"
@@ -272,25 +273,57 @@ func deriveSeniority(titleText string) string {
 }
 
 func deriveExperience(rawSearchSource string) (*int, *int, string) {
-	raw := strings.ToLower(rawSearchSource)
+	searchText := normalizeExperienceText(rawSearchSource)
 
-	if matches := rangeYearsPattern.FindStringSubmatch(raw); len(matches) == 3 {
+	if matches := rangeYearsPattern.FindStringSubmatch(searchText); len(matches) == 3 {
 		minValue := parseInt(matches[1])
 		maxValue := parseInt(matches[2])
 		return &minValue, &maxValue, "high"
 	}
 
-	if matches := atLeastYearsPattern.FindStringSubmatch(raw); len(matches) == 2 {
+	if matches := atLeastYearsPattern.FindStringSubmatch(searchText); len(matches) == 2 {
 		minValue := parseInt(matches[1])
 		return &minValue, nil, "high"
 	}
 
-	if matches := minYearsPattern.FindStringSubmatch(raw); len(matches) == 2 {
+	if matches := minYearsPattern.FindStringSubmatch(searchText); len(matches) == 2 {
 		minValue := parseInt(matches[1])
 		return &minValue, nil, "high"
 	}
 
 	return nil, nil, "unknown"
+}
+
+func normalizeExperienceText(value string) string {
+	unescaped := html.UnescapeString(strings.ToLower(value))
+	unescaped = strings.NewReplacer(`\n`, " ", `\r`, " ", `\t`, " ").Replace(unescaped)
+
+	var builder strings.Builder
+	builder.Grow(len(unescaped))
+
+	lastSpace := false
+	for _, r := range unescaped {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsNumber(r):
+			builder.WriteRune(r)
+			lastSpace = false
+		case r == '+' || r == '-':
+			builder.WriteRune(r)
+			lastSpace = false
+		case unicode.IsSpace(r):
+			if !lastSpace {
+				builder.WriteByte(' ')
+				lastSpace = true
+			}
+		default:
+			if !lastSpace {
+				builder.WriteByte(' ')
+				lastSpace = true
+			}
+		}
+	}
+
+	return strings.TrimSpace(builder.String())
 }
 
 func parseInt(value string) int {
