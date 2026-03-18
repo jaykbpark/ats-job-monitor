@@ -147,6 +147,10 @@ func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 	if notifications[0].JobTitle != "Backend Engineer" {
 		t.Fatalf("unexpected notification job title: %q", notifications[0].JobTitle)
 	}
+
+	if notifications[0].Channel != "inbox" {
+		t.Fatalf("expected inbox channel by default, got %q", notifications[0].Channel)
+	}
 }
 
 func TestSyncWatchTargetCreatesNotificationWhenJobBecomesMatched(t *testing.T) {
@@ -244,6 +248,59 @@ func TestSyncWatchTargetCreatesNotificationWhenJobBecomesMatched(t *testing.T) {
 
 	if len(notifications) != 1 {
 		t.Fatalf("expected notification dedupe on repeated match, got %d", len(notifications))
+	}
+}
+
+func TestSyncWatchTargetCreatesEmailNotificationWhenConfigured(t *testing.T) {
+	ctx := context.Background()
+	dbStore := openMonitorTestStore(t)
+	defer func() {
+		_ = dbStore.Close()
+	}()
+
+	target, err := dbStore.CreateWatchTarget(ctx, store.CreateWatchTargetParams{
+		Name:              "Ashby",
+		Provider:          "ashby",
+		BoardKey:          "Ashby",
+		SourceURL:         "https://jobs.ashbyhq.com/Ashby",
+		NotificationEmail: "jobs@example.com",
+		FiltersJSON: `{
+			"includeKeywordsAny": ["backend"]
+		}`,
+	})
+	if err != nil {
+		t.Fatalf("create watch target: %v", err)
+	}
+
+	service := NewService(dbStore, nil, nil, &fakeAshbyFetcher{
+		jobs: []providers.Job{
+			{
+				ExternalJobID: "job-1",
+				Title:         "Backend Engineer",
+				Location:      "Remote",
+				Department:    "Engineering",
+				JobURL:        "https://jobs.ashbyhq.com/Ashby/job-1",
+				MetadataJSON:  `{"isRemote":true}`,
+				RawJSON:       `{"descriptionPlain":"Build backend systems."}`,
+			},
+		},
+	})
+
+	if _, err := service.SyncWatchTarget(ctx, target.ID); err != nil {
+		t.Fatalf("sync watch target: %v", err)
+	}
+
+	notifications, err := dbStore.ListNotificationsByWatchTarget(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("list notifications: %v", err)
+	}
+
+	if len(notifications) != 1 {
+		t.Fatalf("expected 1 notification, got %d", len(notifications))
+	}
+
+	if notifications[0].Channel != "email" {
+		t.Fatalf("expected email channel, got %q", notifications[0].Channel)
 	}
 }
 

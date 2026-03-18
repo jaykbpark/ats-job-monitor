@@ -65,6 +65,12 @@ func (s *Store) SyncJobs(ctx context.Context, watchTargetID int64, jobs []Synced
 		return SyncJobsResult{}, fmt.Errorf("begin sync jobs transaction: %w", err)
 	}
 
+	notificationChannel, err := notificationChannelByWatchTarget(ctx, tx, watchTargetID)
+	if err != nil {
+		_ = tx.Rollback()
+		return SyncJobsResult{}, err
+	}
+
 	existingJobs, err := existingJobsByExternalID(ctx, tx, watchTargetID)
 	if err != nil {
 		_ = tx.Rollback()
@@ -157,15 +163,15 @@ func (s *Store) SyncJobs(ctx context.Context, watchTargetID int64, jobs []Synced
 		if matchResult.Matched && (!exists || !existingJob.IsMatch) {
 			newMatchesCount++
 			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO notifications (
-					watch_target_id,
-					job_id,
-					kind,
-					channel,
-					status
-				) VALUES (?, ?, 'new_match', 'inbox', 'pending')
-				ON CONFLICT(job_id, channel) DO NOTHING
-			`, watchTargetID, jobID); err != nil {
+					INSERT INTO notifications (
+						watch_target_id,
+						job_id,
+						kind,
+						channel,
+						status
+					) VALUES (?, ?, 'new_match', ?, 'pending')
+					ON CONFLICT(job_id, channel) DO NOTHING
+				`, watchTargetID, jobID, notificationChannel); err != nil {
 				_ = tx.Rollback()
 				return SyncJobsResult{}, fmt.Errorf("create notification for job %q: %w", job.ExternalJobID, err)
 			}
@@ -270,6 +276,24 @@ func (s *Store) ListJobsByWatchTarget(ctx context.Context, params ListJobsParams
 	}
 
 	return jobs, nil
+}
+
+func notificationChannelByWatchTarget(ctx context.Context, tx *sql.Tx, watchTargetID int64) (string, error) {
+	var notificationEmail string
+	row := tx.QueryRowContext(ctx, `
+		SELECT COALESCE(notification_email, '')
+		FROM watch_targets
+		WHERE id = ?
+	`, watchTargetID)
+	if err := row.Scan(&notificationEmail); err != nil {
+		return "", fmt.Errorf("load watch target notification channel: %w", err)
+	}
+
+	if strings.TrimSpace(notificationEmail) != "" {
+		return "email", nil
+	}
+
+	return "inbox", nil
 }
 
 type existingJobState struct {
