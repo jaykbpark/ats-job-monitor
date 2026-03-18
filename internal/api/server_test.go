@@ -269,6 +269,27 @@ func TestSyncWatchTargetAndListJobs(t *testing.T) {
 	if runs[0]["matchedJobsCount"] != float64(1) {
 		t.Fatalf("expected matchedJobsCount=1, got %#v", runs[0]["matchedJobsCount"])
 	}
+
+	notificationsReq := httptest.NewRequest(http.MethodGet, "/api/watch-targets/1/notifications", nil)
+	notificationsRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(notificationsRecorder, notificationsReq)
+
+	if notificationsRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from notifications list, got %d", notificationsRecorder.Code)
+	}
+
+	var notifications []map[string]any
+	if err := json.Unmarshal(notificationsRecorder.Body.Bytes(), &notifications); err != nil {
+		t.Fatalf("decode notifications response: %v", err)
+	}
+
+	if len(notifications) != 1 {
+		t.Fatalf("expected 1 notification, got %d", len(notifications))
+	}
+
+	if notifications[0]["kind"] != "new_match" {
+		t.Fatalf("unexpected notification kind: %#v", notifications[0]["kind"])
+	}
 }
 
 func newTestServer(t *testing.T) *Server {

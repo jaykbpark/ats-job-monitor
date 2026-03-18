@@ -134,6 +134,117 @@ func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 	if runs[0].MatchedJobsCount != 1 {
 		t.Fatalf("expected persisted matched job count to be 1, got %d", runs[0].MatchedJobsCount)
 	}
+
+	notifications, err := dbStore.ListNotificationsByWatchTarget(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("list notifications: %v", err)
+	}
+
+	if len(notifications) != 1 {
+		t.Fatalf("expected 1 notification, got %d", len(notifications))
+	}
+
+	if notifications[0].JobTitle != "Backend Engineer" {
+		t.Fatalf("unexpected notification job title: %q", notifications[0].JobTitle)
+	}
+}
+
+func TestSyncWatchTargetCreatesNotificationWhenJobBecomesMatched(t *testing.T) {
+	ctx := context.Background()
+	dbStore := openMonitorTestStore(t)
+	defer func() {
+		_ = dbStore.Close()
+	}()
+
+	target, err := dbStore.CreateWatchTarget(ctx, store.CreateWatchTargetParams{
+		Name:      "Lever Demo",
+		Provider:  "lever",
+		BoardKey:  "leverdemo",
+		SourceURL: "https://jobs.lever.co/leverdemo",
+		FiltersJSON: `{
+			"includeKeywordsAny": ["software"],
+			"remoteOnly": true
+		}`,
+	})
+	if err != nil {
+		t.Fatalf("create watch target: %v", err)
+	}
+
+	service := NewService(dbStore, nil, &fakeLeverFetcher{
+		jobs: []providers.Job{
+			{
+				ExternalJobID: "job-1",
+				Title:         "Account Executive",
+				Location:      "Atlanta, GA",
+				Department:    "Sales",
+				JobURL:        "https://jobs.lever.co/leverdemo/job-1",
+				MetadataJSON:  `{"workplaceType":"onsite"}`,
+				RawJSON:       `{"descriptionPlain":"Drive enterprise pipeline.","additionalPlain":"Lever builds recruiting software."}`,
+			},
+		},
+	}, nil)
+
+	if _, err := service.SyncWatchTarget(ctx, target.ID); err != nil {
+		t.Fatalf("first sync watch target: %v", err)
+	}
+
+	notifications, err := dbStore.ListNotificationsByWatchTarget(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("list notifications after first sync: %v", err)
+	}
+
+	if len(notifications) != 0 {
+		t.Fatalf("expected 0 notifications after unmatched sync, got %d", len(notifications))
+	}
+
+	service = NewService(dbStore, nil, &fakeLeverFetcher{
+		jobs: []providers.Job{
+			{
+				ExternalJobID: "job-1",
+				Title:         "Software Engineer",
+				Location:      "Remote",
+				Department:    "Engineering",
+				JobURL:        "https://jobs.lever.co/leverdemo/job-1",
+				MetadataJSON:  `{"workplaceType":"remote"}`,
+				RawJSON:       `{"descriptionPlain":"Build backend software systems."}`,
+			},
+		},
+	}, nil)
+
+	run, err := service.SyncWatchTarget(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("second sync watch target: %v", err)
+	}
+
+	if run.MatchedJobsCount != 1 {
+		t.Fatalf("expected 1 matched job after transition, got %d", run.MatchedJobsCount)
+	}
+
+	notifications, err = dbStore.ListNotificationsByWatchTarget(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("list notifications after second sync: %v", err)
+	}
+
+	if len(notifications) != 1 {
+		t.Fatalf("expected 1 notification after match transition, got %d", len(notifications))
+	}
+
+	if notifications[0].JobTitle != "Software Engineer" {
+		t.Fatalf("unexpected notification job title: %q", notifications[0].JobTitle)
+	}
+
+	if _, err := service.SyncWatchTarget(ctx, target.ID); err != nil {
+		t.Fatalf("third sync watch target: %v", err)
+	}
+
+	notifications, err = dbStore.ListNotificationsByWatchTarget(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("list notifications after third sync: %v", err)
+	}
+
+	if len(notifications) != 1 {
+		t.Fatalf("expected notification dedupe on repeated match, got %d", len(notifications))
+	}
 }
 
 func TestSyncWatchTargetSupportsLever(t *testing.T) {

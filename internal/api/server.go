@@ -59,6 +59,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/watch-targets/{id}/sync", s.handleSyncWatchTarget)
 	s.mux.HandleFunc("GET /api/watch-targets/{id}/jobs", s.handleListWatchTargetJobs)
 	s.mux.HandleFunc("GET /api/watch-targets/{id}/sync-runs", s.handleListWatchTargetSyncRuns)
+	s.mux.HandleFunc("GET /api/watch-targets/{id}/notifications", s.handleListWatchTargetNotifications)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -163,6 +164,21 @@ func (s *Server) handleListWatchTargetSyncRuns(w http.ResponseWriter, r *http.Re
 	}
 
 	writeJSON(w, http.StatusOK, runs)
+}
+
+func (s *Server) handleListWatchTargetNotifications(w http.ResponseWriter, r *http.Request) {
+	watchTargetID, ok := parseWatchTargetID(w, r)
+	if !ok {
+		return
+	}
+
+	notifications, err := s.store.ListNotificationsByWatchTarget(r.Context(), watchTargetID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("list notifications: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, notifications)
 }
 
 func normalizeFilters(req createWatchTargetRequest) (string, error) {

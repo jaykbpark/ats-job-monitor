@@ -51,6 +51,7 @@ type SyncJobsResult struct {
 	FetchedJobsCount int `json:"fetchedJobsCount"`
 	MatchedJobsCount int `json:"matchedJobsCount"`
 	NewJobsCount     int `json:"newJobsCount"`
+	NewMatchesCount  int `json:"newMatchesCount"`
 }
 
 func (s *Store) SyncJobs(ctx context.Context, watchTargetID int64, jobs []SyncedJob) (SyncJobsResult, error) {
@@ -59,7 +60,7 @@ func (s *Store) SyncJobs(ctx context.Context, watchTargetID int64, jobs []Synced
 		return SyncJobsResult{}, fmt.Errorf("begin sync jobs transaction: %w", err)
 	}
 
-	existingIDs, err := existingJobIDs(ctx, tx, watchTargetID)
+	existingJobs, err := existingJobsByExternalID(ctx, tx, watchTargetID)
 	if err != nil {
 		_ = tx.Rollback()
 		return SyncJobsResult{}, err
@@ -67,6 +68,7 @@ func (s *Store) SyncJobs(ctx context.Context, watchTargetID int64, jobs []Synced
 
 	newJobsCount := 0
 	matchedJobsCount := 0
+	newMatchesCount := 0
 	incomingIDs := make([]string, 0, len(jobs))
 	for _, syncedJob := range jobs {
 		job := syncedJob.Job
@@ -74,14 +76,15 @@ func (s *Store) SyncJobs(ctx context.Context, watchTargetID int64, jobs []Synced
 		matchResult := syncedJob.Match
 
 		incomingIDs = append(incomingIDs, job.ExternalJobID)
-		if _, exists := existingIDs[job.ExternalJobID]; !exists {
+		existingJob, exists := existingJobs[job.ExternalJobID]
+		if !exists {
 			newJobsCount++
 		}
 		if matchResult.Matched {
 			matchedJobsCount++
 		}
 
-		if _, err := tx.ExecContext(ctx, `
+		result, err := tx.ExecContext(ctx, `
 			INSERT INTO jobs (
 				watch_target_id,
 				external_job_id,
@@ -131,9 +134,36 @@ func (s *Store) SyncJobs(ctx context.Context, watchTargetID int64, jobs []Synced
 				last_seen_at = CURRENT_TIMESTAMP,
 				matched_at = CASE WHEN excluded.is_match = 1 THEN CURRENT_TIMESTAMP ELSE NULL END,
 				is_active = 1
-		`, watchTargetID, job.ExternalJobID, job.Title, job.Location, job.Department, job.Team, job.EmploymentType, job.JobURL, defaultJSON(job.MetadataJSON), job.RawJSON, jobSignals.SearchText, jobSignals.NormalizedLocation, boolToInt(jobSignals.IsRemote), jobSignals.NormalizedEmploymentType, jobSignals.Seniority, nullableInt(jobSignals.MinYearsExperience), nullableInt(jobSignals.MaxYearsExperience), jobSignals.ExperienceConfidence, boolToInt(matchResult.Matched), defaultJSONArray(matchResult.MatchReasons), defaultJSONArray(matchResult.HardFailures), boolToInt(matchResult.Matched)); err != nil {
+		`, watchTargetID, job.ExternalJobID, job.Title, job.Location, job.Department, job.Team, job.EmploymentType, job.JobURL, defaultJSON(job.MetadataJSON), job.RawJSON, jobSignals.SearchText, jobSignals.NormalizedLocation, boolToInt(jobSignals.IsRemote), jobSignals.NormalizedEmploymentType, jobSignals.Seniority, nullableInt(jobSignals.MinYearsExperience), nullableInt(jobSignals.MaxYearsExperience), jobSignals.ExperienceConfidence, boolToInt(matchResult.Matched), defaultJSONArray(matchResult.MatchReasons), defaultJSONArray(matchResult.HardFailures), boolToInt(matchResult.Matched))
+		if err != nil {
 			_ = tx.Rollback()
 			return SyncJobsResult{}, fmt.Errorf("upsert synced job %q: %w", job.ExternalJobID, err)
+		}
+
+		jobID := existingJob.ID
+		if !exists {
+			jobID, err = result.LastInsertId()
+			if err != nil {
+				_ = tx.Rollback()
+				return SyncJobsResult{}, fmt.Errorf("read inserted job id for %q: %w", job.ExternalJobID, err)
+			}
+		}
+
+		if matchResult.Matched && (!exists || !existingJob.IsMatch) {
+			newMatchesCount++
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO notifications (
+					watch_target_id,
+					job_id,
+					kind,
+					channel,
+					status
+				) VALUES (?, ?, 'new_match', 'inbox', 'pending')
+				ON CONFLICT(job_id, channel) DO NOTHING
+			`, watchTargetID, jobID); err != nil {
+				_ = tx.Rollback()
+				return SyncJobsResult{}, fmt.Errorf("create notification for job %q: %w", job.ExternalJobID, err)
+			}
 		}
 	}
 
@@ -172,6 +202,7 @@ func (s *Store) SyncJobs(ctx context.Context, watchTargetID int64, jobs []Synced
 		FetchedJobsCount: len(jobs),
 		MatchedJobsCount: matchedJobsCount,
 		NewJobsCount:     newJobsCount,
+		NewMatchesCount:  newMatchesCount,
 	}, nil
 }
 
@@ -229,31 +260,41 @@ func (s *Store) ListJobsByWatchTarget(ctx context.Context, watchTargetID int64) 
 	return jobs, nil
 }
 
-func existingJobIDs(ctx context.Context, tx *sql.Tx, watchTargetID int64) (map[string]struct{}, error) {
+type existingJobState struct {
+	ID      int64
+	IsMatch bool
+}
+
+func existingJobsByExternalID(ctx context.Context, tx *sql.Tx, watchTargetID int64) (map[string]existingJobState, error) {
 	rows, err := tx.QueryContext(ctx, `
-		SELECT external_job_id
+		SELECT id, external_job_id, is_match
 		FROM jobs
 		WHERE watch_target_id = ?
 	`, watchTargetID)
 	if err != nil {
-		return nil, fmt.Errorf("query existing job ids: %w", err)
+		return nil, fmt.Errorf("query existing jobs: %w", err)
 	}
 	defer rows.Close()
 
-	ids := map[string]struct{}{}
+	jobs := map[string]existingJobState{}
 	for rows.Next() {
+		var id int64
 		var externalJobID string
-		if err := rows.Scan(&externalJobID); err != nil {
-			return nil, fmt.Errorf("scan existing job id: %w", err)
+		var isMatch int
+		if err := rows.Scan(&id, &externalJobID, &isMatch); err != nil {
+			return nil, fmt.Errorf("scan existing job: %w", err)
 		}
-		ids[externalJobID] = struct{}{}
+		jobs[externalJobID] = existingJobState{
+			ID:      id,
+			IsMatch: isMatch == 1,
+		}
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate existing job ids: %w", err)
+		return nil, fmt.Errorf("iterate existing jobs: %w", err)
 	}
 
-	return ids, nil
+	return jobs, nil
 }
 
 func buildDeactivateMissingJobsQuery(watchTargetID int64, incomingIDs []string) (string, []any) {

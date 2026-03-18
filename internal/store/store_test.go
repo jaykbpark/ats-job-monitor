@@ -22,8 +22,8 @@ func TestMigrateAppliesEmbeddedSQLFiles(t *testing.T) {
 		t.Fatalf("failed to read applied migrations: %v", err)
 	}
 
-	if len(records) != 3 {
-		t.Fatalf("expected 3 applied migrations, got %d", len(records))
+	if len(records) != 4 {
+		t.Fatalf("expected 4 applied migrations, got %d", len(records))
 	}
 
 	if records[0].Version != "0001_init.sql" {
@@ -36,6 +36,10 @@ func TestMigrateAppliesEmbeddedSQLFiles(t *testing.T) {
 
 	if records[2].Version != "0003_job_match_state.sql" {
 		t.Fatalf("unexpected third migration version: %q", records[2].Version)
+	}
+
+	if records[3].Version != "0004_notification_kind.sql" {
+		t.Fatalf("unexpected fourth migration version: %q", records[3].Version)
 	}
 
 	if err := store.Migrate(ctx); err != nil {
