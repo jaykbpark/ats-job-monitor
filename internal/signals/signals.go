@@ -1,6 +1,7 @@
 package signals
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -83,7 +84,19 @@ func isCommonSeparator(r rune) bool {
 }
 
 func deriveIsRemote(location string, metadataJSON string, rawJSON string) bool {
-	searchSpace := normalizeText(strings.Join([]string{location, metadataJSON, rawJSON}, " "))
+	if explicit, ok := explicitRemoteSignal(metadataJSON); ok {
+		return explicit
+	}
+
+	if explicit, ok := explicitRemoteSignal(rawJSON); ok {
+		return explicit
+	}
+
+	searchSpace := normalizeText(strings.Join([]string{
+		location,
+		extractRemoteSearchText(metadataJSON),
+		extractRemoteSearchText(rawJSON),
+	}, " "))
 
 	remoteMarkers := []string{
 		"remote",
@@ -99,6 +112,113 @@ func deriveIsRemote(location string, metadataJSON string, rawJSON string) bool {
 	}
 
 	return false
+}
+
+func explicitRemoteSignal(document string) (bool, bool) {
+	var payload any
+	if err := json.Unmarshal([]byte(document), &payload); err != nil {
+		return false, false
+	}
+
+	if value, ok := findBoolForKey(payload, "isRemote"); ok {
+		return value, true
+	}
+
+	if value, ok := findStringForKey(payload, "workplaceType"); ok {
+		switch normalizeText(value) {
+		case "remote":
+			return true, true
+		case "hybrid", "onsite", "on site":
+			return false, true
+		}
+	}
+
+	return false, false
+}
+
+func extractRemoteSearchText(document string) string {
+	var payload any
+	if err := json.Unmarshal([]byte(document), &payload); err != nil {
+		return ""
+	}
+
+	var values []string
+	collectStringValuesForKeys(payload, map[string]struct{}{
+		"workplaceType":    {},
+		"description":      {},
+		"descriptionHtml":  {},
+		"descriptionPlain": {},
+		"additionalPlain":  {},
+		"content":          {},
+	}, &values)
+
+	return strings.Join(values, " ")
+}
+
+func findBoolForKey(value any, key string) (bool, bool) {
+	switch typed := value.(type) {
+	case map[string]any:
+		if direct, ok := typed[key]; ok {
+			if boolValue, ok := direct.(bool); ok {
+				return boolValue, true
+			}
+		}
+		for _, child := range typed {
+			if boolValue, ok := findBoolForKey(child, key); ok {
+				return boolValue, true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if boolValue, ok := findBoolForKey(child, key); ok {
+				return boolValue, true
+			}
+		}
+	}
+
+	return false, false
+}
+
+func findStringForKey(value any, key string) (string, bool) {
+	switch typed := value.(type) {
+	case map[string]any:
+		if direct, ok := typed[key]; ok {
+			if stringValue, ok := direct.(string); ok {
+				return stringValue, true
+			}
+		}
+		for _, child := range typed {
+			if stringValue, ok := findStringForKey(child, key); ok {
+				return stringValue, true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if stringValue, ok := findStringForKey(child, key); ok {
+				return stringValue, true
+			}
+		}
+	}
+
+	return "", false
+}
+
+func collectStringValuesForKeys(value any, keys map[string]struct{}, values *[]string) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			if _, ok := keys[key]; ok {
+				if stringValue, ok := child.(string); ok && strings.TrimSpace(stringValue) != "" {
+					*values = append(*values, stringValue)
+				}
+			}
+			collectStringValuesForKeys(child, keys, values)
+		}
+	case []any:
+		for _, child := range typed {
+			collectStringValuesForKeys(child, keys, values)
+		}
+	}
 }
 
 func normalizeEmploymentType(value string) string {

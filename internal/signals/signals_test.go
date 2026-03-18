@@ -71,6 +71,18 @@ func TestDeriveIsRemote(t *testing.T) {
 			want:         false,
 		},
 		{
+			name:         "explicit false isRemote beats key name",
+			location:     "San Francisco, CA",
+			metadataJSON: `{"isRemote":false}`,
+			want:         false,
+		},
+		{
+			name:     "explicit false in raw payload beats remote text elsewhere",
+			location: "Menlo Park, CA",
+			rawJSON:  `{"isRemote":false,"description":"Remote collaboration with distributed teammates"}`,
+			want:     false,
+		},
+		{
 			name:     "onsite role stays false",
 			location: "Austin, TX",
 			want:     false,
