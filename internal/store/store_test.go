@@ -22,8 +22,8 @@ func TestMigrateAppliesEmbeddedSQLFiles(t *testing.T) {
 		t.Fatalf("failed to read applied migrations: %v", err)
 	}
 
-	if len(records) != 4 {
-		t.Fatalf("expected 4 applied migrations, got %d", len(records))
+	if len(records) != 5 {
+		t.Fatalf("expected 5 applied migrations, got %d", len(records))
 	}
 
 	if records[0].Version != "0001_init.sql" {
@@ -40,6 +40,10 @@ func TestMigrateAppliesEmbeddedSQLFiles(t *testing.T) {
 
 	if records[3].Version != "0004_notification_kind.sql" {
 		t.Fatalf("unexpected fourth migration version: %q", records[3].Version)
+	}
+
+	if records[4].Version != "0005_watch_target_notification_email.sql" {
+		t.Fatalf("unexpected fifth migration version: %q", records[4].Version)
 	}
 
 	if err := store.Migrate(ctx); err != nil {
@@ -59,11 +63,12 @@ func TestCreateAndListWatchTargets(t *testing.T) {
 	}
 
 	target, err := store.CreateWatchTarget(ctx, CreateWatchTargetParams{
-		Name:        "Greenhouse",
-		Provider:    "greenhouse",
-		BoardKey:    "greenhouse",
-		SourceURL:   "https://job-boards.greenhouse.io/greenhouse",
-		FiltersJSON: `{"includeKeywordsAny":["platform"]}`,
+		Name:              "Greenhouse",
+		Provider:          "greenhouse",
+		BoardKey:          "greenhouse",
+		SourceURL:         "https://job-boards.greenhouse.io/greenhouse",
+		NotificationEmail: "jobs@example.com",
+		FiltersJSON:       `{"includeKeywordsAny":["platform"]}`,
 	})
 	if err != nil {
 		t.Fatalf("create watch target failed: %v", err)
@@ -94,8 +99,34 @@ func TestCreateAndListWatchTargets(t *testing.T) {
 		t.Fatalf("unexpected source url: %q", targets[0].SourceURL)
 	}
 
+	if targets[0].NotificationEmail != "jobs@example.com" {
+		t.Fatalf("unexpected notification email: %q", targets[0].NotificationEmail)
+	}
+
 	if len(targets[0].Filters.IncludeKeywordsAny) != 1 || targets[0].Filters.IncludeKeywordsAny[0] != "platform" {
 		t.Fatalf("unexpected parsed filters: %#v", targets[0].Filters)
+	}
+}
+
+func TestCreateWatchTargetRejectsInvalidNotificationEmail(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t)
+	defer func() {
+		_ = store.Close()
+	}()
+
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatalf("migrate failed: %v", err)
+	}
+
+	_, err := store.CreateWatchTarget(ctx, CreateWatchTargetParams{
+		Name:              "Greenhouse",
+		Provider:          "greenhouse",
+		BoardKey:          "greenhouse",
+		NotificationEmail: "not-an-email",
+	})
+	if err == nil {
+		t.Fatal("expected invalid notification email to be rejected")
 	}
 }
 

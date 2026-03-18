@@ -4,32 +4,35 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/mail"
 	"strings"
 
 	"github.com/jaykbpark/ats-job-monitor/internal/filters"
 )
 
 type WatchTarget struct {
-	ID           int64               `json:"id"`
-	Name         string              `json:"name"`
-	Provider     string              `json:"provider"`
-	BoardKey     string              `json:"boardKey"`
-	SourceURL    string              `json:"sourceUrl,omitempty"`
-	FiltersJSON  string              `json:"filtersJson"`
-	Filters      filters.HardFilters `json:"filters"`
-	Status       string              `json:"status"`
-	LastSyncedAt string              `json:"lastSyncedAt,omitempty"`
-	CreatedAt    string              `json:"createdAt"`
-	UpdatedAt    string              `json:"updatedAt"`
+	ID                int64               `json:"id"`
+	Name              string              `json:"name"`
+	Provider          string              `json:"provider"`
+	BoardKey          string              `json:"boardKey"`
+	SourceURL         string              `json:"sourceUrl,omitempty"`
+	NotificationEmail string              `json:"notificationEmail,omitempty"`
+	FiltersJSON       string              `json:"filtersJson"`
+	Filters           filters.HardFilters `json:"filters"`
+	Status            string              `json:"status"`
+	LastSyncedAt      string              `json:"lastSyncedAt,omitempty"`
+	CreatedAt         string              `json:"createdAt"`
+	UpdatedAt         string              `json:"updatedAt"`
 }
 
 type CreateWatchTargetParams struct {
-	Name        string
-	Provider    string
-	BoardKey    string
-	SourceURL   string
-	FiltersJSON string
-	Status      string
+	Name              string
+	Provider          string
+	BoardKey          string
+	SourceURL         string
+	NotificationEmail string
+	FiltersJSON       string
+	Status            string
 }
 
 func (s *Store) CreateWatchTarget(ctx context.Context, params CreateWatchTargetParams) (WatchTarget, error) {
@@ -64,10 +67,15 @@ func (s *Store) CreateWatchTarget(ctx context.Context, params CreateWatchTargetP
 		status = "active"
 	}
 
+	notificationEmail, err := normalizeNotificationEmail(params.NotificationEmail)
+	if err != nil {
+		return WatchTarget{}, err
+	}
+
 	result, err := s.db.ExecContext(ctx, `
-		INSERT INTO watch_targets (name, provider, board_key, source_url, filters_json, status)
-		VALUES (?, ?, ?, NULLIF(?, ''), ?, ?)
-	`, name, provider, boardKey, strings.TrimSpace(params.SourceURL), filtersJSON, status)
+		INSERT INTO watch_targets (name, provider, board_key, source_url, notification_email, filters_json, status)
+		VALUES (?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?)
+	`, name, provider, boardKey, strings.TrimSpace(params.SourceURL), notificationEmail, filtersJSON, status)
 	if err != nil {
 		return WatchTarget{}, fmt.Errorf("insert watch target: %w", err)
 	}
@@ -88,6 +96,7 @@ func (s *Store) GetWatchTarget(ctx context.Context, id int64) (WatchTarget, erro
 			provider,
 			board_key,
 			COALESCE(source_url, ''),
+			COALESCE(notification_email, ''),
 			filters_json,
 			status,
 			COALESCE(last_synced_at, ''),
@@ -113,6 +122,7 @@ func (s *Store) ListWatchTargets(ctx context.Context) ([]WatchTarget, error) {
 			provider,
 			board_key,
 			COALESCE(source_url, ''),
+			COALESCE(notification_email, ''),
 			filters_json,
 			status,
 			COALESCE(last_synced_at, ''),
@@ -154,6 +164,7 @@ func scanWatchTarget(row scanner) (WatchTarget, error) {
 		&target.Provider,
 		&target.BoardKey,
 		&target.SourceURL,
+		&target.NotificationEmail,
 		&target.FiltersJSON,
 		&target.Status,
 		&target.LastSyncedAt,
@@ -173,4 +184,18 @@ func scanWatchTarget(row scanner) (WatchTarget, error) {
 	target.Filters = parsedFilters
 
 	return target, nil
+}
+
+func normalizeNotificationEmail(value string) (string, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", nil
+	}
+
+	address, err := mail.ParseAddress(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("notification email is invalid")
+	}
+
+	return strings.TrimSpace(address.Address), nil
 }

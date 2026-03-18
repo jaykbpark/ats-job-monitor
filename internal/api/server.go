@@ -23,13 +23,14 @@ type Server struct {
 }
 
 type createWatchTargetRequest struct {
-	Name       string `json:"name"`
-	Provider   string `json:"provider"`
-	BoardKey   string `json:"boardKey"`
-	SourceURL  string `json:"sourceUrl"`
-	Filters    any    `json:"filters"`
-	FiltersRaw string `json:"filtersJson"`
-	Status     string `json:"status"`
+	Name              string `json:"name"`
+	Provider          string `json:"provider"`
+	BoardKey          string `json:"boardKey"`
+	SourceURL         string `json:"sourceUrl"`
+	NotificationEmail string `json:"notificationEmail"`
+	Filters           any    `json:"filters"`
+	FiltersRaw        string `json:"filtersJson"`
+	Status            string `json:"status"`
 }
 
 func NewServer(store *store.Store, syncService *monitorpkg.Service) *Server {
@@ -98,12 +99,13 @@ func (s *Server) handleCreateWatchTarget(w http.ResponseWriter, r *http.Request)
 	}
 
 	target, err := s.store.CreateWatchTarget(r.Context(), store.CreateWatchTargetParams{
-		Name:        req.Name,
-		Provider:    req.Provider,
-		BoardKey:    req.BoardKey,
-		SourceURL:   req.SourceURL,
-		FiltersJSON: filtersJSON,
-		Status:      req.Status,
+		Name:              req.Name,
+		Provider:          req.Provider,
+		BoardKey:          req.BoardKey,
+		SourceURL:         req.SourceURL,
+		NotificationEmail: req.NotificationEmail,
+		FiltersJSON:       filtersJSON,
+		Status:            req.Status,
 	})
 	if err != nil {
 		status := http.StatusInternalServerError
@@ -238,7 +240,7 @@ func writeError(w http.ResponseWriter, statusCode int, message string) {
 
 func isValidationError(err error) bool {
 	message := err.Error()
-	return strings.Contains(message, "required")
+	return strings.Contains(message, "required") || strings.Contains(message, "invalid")
 }
 
 func parseWatchTargetID(w http.ResponseWriter, r *http.Request) (int64, bool) {

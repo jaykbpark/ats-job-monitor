@@ -80,13 +80,14 @@ func TestCreateAndListWatchTargetsEndpoints(t *testing.T) {
 	server := newTestServer(t)
 
 	body := []byte(`{
-	  "name": "Greenhouse",
-	  "provider": "greenhouse",
-	  "boardKey": "greenhouse",
-	  "sourceUrl": "https://job-boards.greenhouse.io/greenhouse",
-	  "filters": {
-	    "includeKeywordsAny": ["platform", "backend"]
-	  }
+		  "name": "Greenhouse",
+		  "provider": "greenhouse",
+		  "boardKey": "greenhouse",
+		  "sourceUrl": "https://job-boards.greenhouse.io/greenhouse",
+		  "notificationEmail": "jobs@example.com",
+		  "filters": {
+		    "includeKeywordsAny": ["platform", "backend"]
+		  }
 	}`)
 
 	createReq := httptest.NewRequest(http.MethodPost, "/api/watch-targets", bytes.NewReader(body))
@@ -106,6 +107,10 @@ func TestCreateAndListWatchTargetsEndpoints(t *testing.T) {
 
 	if created["provider"] != "greenhouse" {
 		t.Fatalf("unexpected provider: %#v", created["provider"])
+	}
+
+	if created["notificationEmail"] != "jobs@example.com" {
+		t.Fatalf("unexpected notificationEmail: %#v", created["notificationEmail"])
 	}
 
 	listReq := httptest.NewRequest(http.MethodGet, "/api/watch-targets", nil)
@@ -134,6 +139,27 @@ func TestCreateWatchTargetRejectsInvalidFiltersJSON(t *testing.T) {
 	  "provider": "greenhouse",
 	  "boardKey": "greenhouse",
 	  "filtersJson": "{bad json}"
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/watch-targets", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", recorder.Code)
+	}
+}
+
+func TestCreateWatchTargetRejectsInvalidNotificationEmail(t *testing.T) {
+	server := newTestServer(t)
+
+	body := []byte(`{
+	  "name": "Bad Email",
+	  "provider": "greenhouse",
+	  "boardKey": "greenhouse",
+	  "notificationEmail": "not-an-email"
 	}`)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/watch-targets", bytes.NewReader(body))
