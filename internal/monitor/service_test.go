@@ -48,6 +48,10 @@ func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 		Provider:  "greenhouse",
 		BoardKey:  "greenhouse",
 		SourceURL: "https://job-boards.greenhouse.io/greenhouse",
+		FiltersJSON: `{
+			"includeKeywordsAny": ["backend"],
+			"remoteOnly": true
+		}`,
 	})
 	if err != nil {
 		t.Fatalf("create watch target: %v", err)
@@ -64,6 +68,15 @@ func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 				MetadataJSON:  `{"team":"Platform"}`,
 				RawJSON:       `{"id":42}`,
 			},
+			{
+				ExternalJobID: "43",
+				Title:         "Office IT Engineer",
+				Location:      "San Francisco, CA",
+				Department:    "Engineering",
+				JobURL:        "https://job-boards.greenhouse.io/greenhouse/jobs/43",
+				MetadataJSON:  `{"team":"Internal Systems"}`,
+				RawJSON:       `{"id":43}`,
+			},
 		},
 	}, nil, nil)
 
@@ -76,8 +89,12 @@ func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 		t.Fatalf("expected succeeded run, got %q", run.Status)
 	}
 
-	if run.NewJobsCount != 1 {
-		t.Fatalf("expected 1 new job, got %d", run.NewJobsCount)
+	if run.NewJobsCount != 2 {
+		t.Fatalf("expected 2 new jobs, got %d", run.NewJobsCount)
+	}
+
+	if run.MatchedJobsCount != 1 {
+		t.Fatalf("expected 1 matched job, got %d", run.MatchedJobsCount)
 	}
 
 	jobs, err := dbStore.ListJobsByWatchTarget(ctx, target.ID)
@@ -85,16 +102,24 @@ func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 		t.Fatalf("list synced jobs: %v", err)
 	}
 
-	if len(jobs) != 1 {
-		t.Fatalf("expected 1 persisted job, got %d", len(jobs))
+	if len(jobs) != 2 {
+		t.Fatalf("expected 2 persisted jobs, got %d", len(jobs))
 	}
 
 	if jobs[0].SearchText == "" {
 		t.Fatal("expected derived search text to be persisted")
 	}
 
-	if jobs[0].NormalizedEmploymentType != "unknown" {
-		t.Fatalf("unexpected normalized employment type: %q", jobs[0].NormalizedEmploymentType)
+	if !jobs[0].IsMatch {
+		t.Fatalf("expected first job to match filters: %#v", jobs[0])
+	}
+
+	if jobs[1].IsMatch {
+		t.Fatalf("expected second job not to match filters: %#v", jobs[1])
+	}
+
+	if len(jobs[1].HardFailures) == 0 {
+		t.Fatalf("expected hard failures for unmatched job: %#v", jobs[1])
 	}
 
 	runs, err := dbStore.ListSyncRunsByWatchTarget(ctx, target.ID)
@@ -104,6 +129,10 @@ func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 
 	if len(runs) != 1 {
 		t.Fatalf("expected 1 sync run, got %d", len(runs))
+	}
+
+	if runs[0].MatchedJobsCount != 1 {
+		t.Fatalf("expected persisted matched job count to be 1, got %d", runs[0].MatchedJobsCount)
 	}
 }
 

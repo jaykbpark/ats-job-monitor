@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/jaykbpark/ats-job-monitor/internal/ats"
+	"github.com/jaykbpark/ats-job-monitor/internal/matching"
 	"github.com/jaykbpark/ats-job-monitor/internal/providers"
+	"github.com/jaykbpark/ats-job-monitor/internal/signals"
 	"github.com/jaykbpark/ats-job-monitor/internal/store"
 )
 
@@ -77,13 +79,24 @@ func (s *Service) SyncWatchTarget(ctx context.Context, watchTargetID int64) (sto
 		return run, err
 	}
 
-	result, err := s.store.SyncJobs(ctx, target.ID, jobs)
+	syncedJobs := make([]store.SyncedJob, 0, len(jobs))
+	for _, job := range jobs {
+		jobSignals := signals.Derive(job)
+		matchResult := matching.Evaluate(target.Filters, jobSignals)
+		syncedJobs = append(syncedJobs, store.SyncedJob{
+			Job:     job,
+			Signals: jobSignals,
+			Match:   matchResult,
+		})
+	}
+
+	result, err := s.store.SyncJobs(ctx, target.ID, syncedJobs)
 	if err != nil {
 		run, recordErr := s.store.RecordSyncRun(ctx, store.RecordSyncRunParams{
 			WatchTargetID:    target.ID,
 			Status:           "failed",
 			FetchedJobsCount: len(jobs),
-			MatchedJobsCount: len(jobs),
+			MatchedJobsCount: 0,
 			ErrorMessage:     err.Error(),
 		})
 		if recordErr != nil {

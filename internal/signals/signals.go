@@ -29,6 +29,14 @@ var (
 )
 
 func Derive(job providers.Job) JobSignals {
+	keywordSearchSource := strings.Join([]string{
+		job.Title,
+		job.Department,
+		job.Team,
+		job.Location,
+		job.EmploymentType,
+		extractKeywordSearchText(job.RawJSON),
+	}, " ")
 	rawSearchSource := strings.Join([]string{
 		job.Title,
 		job.Department,
@@ -38,7 +46,7 @@ func Derive(job providers.Job) JobSignals {
 		job.RawJSON,
 	}, " ")
 
-	searchText := normalizeText(rawSearchSource)
+	searchText := normalizeText(keywordSearchSource)
 	normalizedLocation := normalizeText(job.Location)
 	minYears, maxYears, experienceConfidence := deriveExperience(rawSearchSource)
 	titleText := normalizeText(job.Title)
@@ -151,6 +159,23 @@ func extractRemoteSearchText(document string) string {
 		"descriptionHtml":  {},
 		"descriptionPlain": {},
 		"additionalPlain":  {},
+		"content":          {},
+	}, &values)
+
+	return strings.Join(values, " ")
+}
+
+func extractKeywordSearchText(document string) string {
+	var payload any
+	if err := json.Unmarshal([]byte(document), &payload); err != nil {
+		return ""
+	}
+
+	var values []string
+	collectStringValuesForKeys(payload, map[string]struct{}{
+		"description":      {},
+		"descriptionHtml":  {},
+		"descriptionPlain": {},
 		"content":          {},
 	}, &values)
 

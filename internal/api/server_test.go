@@ -211,7 +211,10 @@ func TestCreateWatchTargetReturnsTypedFilters(t *testing.T) {
 func TestSyncWatchTargetAndListJobs(t *testing.T) {
 	server := newTestServer(t)
 
-	createWatchTargetForTest(t, server)
+	createWatchTargetForTest(t, server, `{
+	  "includeKeywordsAny": ["backend"],
+	  "remoteOnly": true
+	}`)
 
 	syncReq := httptest.NewRequest(http.MethodPost, "/api/watch-targets/1/sync", nil)
 	syncRecorder := httptest.NewRecorder()
@@ -234,8 +237,16 @@ func TestSyncWatchTargetAndListJobs(t *testing.T) {
 		t.Fatalf("decode jobs response: %v", err)
 	}
 
-	if len(jobs) != 1 {
-		t.Fatalf("expected 1 synced job, got %d", len(jobs))
+	if len(jobs) != 2 {
+		t.Fatalf("expected 2 synced jobs, got %d", len(jobs))
+	}
+
+	if jobs[0]["isMatch"] != true {
+		t.Fatalf("expected first synced job to match filters, got %#v", jobs[0]["isMatch"])
+	}
+
+	if jobs[1]["isMatch"] != false {
+		t.Fatalf("expected second synced job not to match filters, got %#v", jobs[1]["isMatch"])
 	}
 
 	runsReq := httptest.NewRequest(http.MethodGet, "/api/watch-targets/1/sync-runs", nil)
@@ -253,6 +264,10 @@ func TestSyncWatchTargetAndListJobs(t *testing.T) {
 
 	if len(runs) != 1 {
 		t.Fatalf("expected 1 sync run, got %d", len(runs))
+	}
+
+	if runs[0]["matchedJobsCount"] != float64(1) {
+		t.Fatalf("expected matchedJobsCount=1, got %#v", runs[0]["matchedJobsCount"])
 	}
 }
 
@@ -284,18 +299,28 @@ func newTestServer(t *testing.T) *Server {
 				MetadataJSON:  `{"team":"Platform"}`,
 				RawJSON:       `{"id":42}`,
 			},
+			{
+				ExternalJobID: "43",
+				Title:         "Office IT Engineer",
+				Location:      "San Francisco, CA",
+				Department:    "Engineering",
+				JobURL:        "https://job-boards.greenhouse.io/greenhouse/jobs/43",
+				MetadataJSON:  `{"team":"Internal Systems"}`,
+				RawJSON:       `{"id":43}`,
+			},
 		},
 	}, &fakeLeverFetcher{}, &fakeAshbyFetcher{}))
 }
 
-func createWatchTargetForTest(t *testing.T, server *Server) {
+func createWatchTargetForTest(t *testing.T, server *Server, filtersJSON string) {
 	t.Helper()
 
 	body := []byte(`{
 	  "name": "Greenhouse",
 	  "provider": "greenhouse",
 	  "boardKey": "greenhouse",
-	  "sourceUrl": "https://job-boards.greenhouse.io/greenhouse"
+	  "sourceUrl": "https://job-boards.greenhouse.io/greenhouse",
+	  "filters": ` + filtersJSON + `
 	}`)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/watch-targets", bytes.NewReader(body))

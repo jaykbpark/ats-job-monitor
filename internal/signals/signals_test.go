@@ -1,6 +1,7 @@
 package signals
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jaykbpark/ats-job-monitor/internal/providers"
@@ -334,6 +335,28 @@ func TestDerive(t *testing.T) {
 
 	if got.ExperienceConfidence != "high" {
 		t.Fatalf("unexpected experience confidence: %q", got.ExperienceConfidence)
+	}
+}
+
+func TestDeriveSearchTextExcludesGenericAdditionalPlainBoilerplate(t *testing.T) {
+	job := providers.Job{
+		Title:      "Account Executive",
+		Department: "Sales",
+		RawJSON:    `{"descriptionPlain":"Drive enterprise pipeline and manage accounts.","additionalPlain":"Lever builds modern recruiting software for teams."}`,
+	}
+
+	got := Derive(job)
+
+	if got.SearchText == "" {
+		t.Fatal("expected search text to be populated")
+	}
+
+	if contains := strings.Contains(got.SearchText, "software"); contains {
+		t.Fatalf("expected search text to exclude generic additionalPlain boilerplate, got %q", got.SearchText)
+	}
+
+	if !strings.Contains(got.SearchText, "drive enterprise pipeline") {
+		t.Fatalf("expected search text to retain role content, got %q", got.SearchText)
 	}
 }
 
