@@ -13,6 +13,10 @@ type Sink interface {
 	Deliver(ctx context.Context, notification store.NotificationRecord) error
 }
 
+type RoutingSink struct {
+	sinks map[string]Sink
+}
+
 type Service struct {
 	store *store.Store
 	sink  Sink
@@ -33,6 +37,18 @@ func NewService(store *store.Store, sink Sink) *Service {
 		store: store,
 		sink:  sink,
 	}
+}
+
+func NewRoutingSink(sinks map[string]Sink) *RoutingSink {
+	cloned := make(map[string]Sink, len(sinks))
+	for channel, sink := range sinks {
+		if sink == nil {
+			continue
+		}
+		cloned[channel] = sink
+	}
+
+	return &RoutingSink{sinks: cloned}
 }
 
 func (s *Service) DeliverPending(ctx context.Context, limit int) (Result, error) {
@@ -92,4 +108,13 @@ func (s *ConsoleSink) Deliver(ctx context.Context, notification store.Notificati
 	}
 
 	return nil
+}
+
+func (s *RoutingSink) Deliver(ctx context.Context, notification store.NotificationRecord) error {
+	sink, ok := s.sinks[notification.Channel]
+	if !ok {
+		return fmt.Errorf("unsupported notification channel %q", notification.Channel)
+	}
+
+	return sink.Deliver(ctx, notification)
 }

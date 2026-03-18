@@ -117,3 +117,24 @@ The API currently serves:
 - `POST /api/watch-targets/{id}/sync`
 - `GET /api/watch-targets/{id}/jobs`
 - `GET /api/watch-targets/{id}/sync-runs`
+- `GET /api/watch-targets/{id}/notifications`
+
+`POST /api/watch-targets` accepts an optional `notificationEmail` field. When present, newly matched jobs for that target are queued for `email` delivery instead of the default `inbox` channel.
+
+Deliver pending notifications from the worker CLI:
+
+```bash
+go run ./cmd/atsctl deliver-notifications ./ats-job-monitor.db
+```
+
+For email delivery, configure SMTP with environment variables:
+
+```bash
+export ATS_JOB_MONITOR_SMTP_HOST="smtp.example.com"
+export ATS_JOB_MONITOR_SMTP_PORT="587"
+export ATS_JOB_MONITOR_SMTP_USERNAME="smtp-user"
+export ATS_JOB_MONITOR_SMTP_PASSWORD="smtp-password"
+export ATS_JOB_MONITOR_SMTP_FROM="alerts@example.com"
+```
+
+The SMTP sink currently targets standard SMTP/STARTTLS style endpoints such as port `587`.

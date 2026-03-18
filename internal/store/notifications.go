@@ -7,28 +7,32 @@ import (
 )
 
 type NotificationRecord struct {
-	ID            int64  `json:"id"`
-	WatchTargetID int64  `json:"watchTargetId"`
-	JobID         int64  `json:"jobId"`
-	ExternalJobID string `json:"externalJobId"`
-	JobTitle      string `json:"jobTitle"`
-	JobURL        string `json:"jobUrl"`
-	Kind          string `json:"kind"`
-	Channel       string `json:"channel"`
-	Status        string `json:"status"`
-	SentAt        string `json:"sentAt,omitempty"`
-	ErrorMessage  string `json:"errorMessage,omitempty"`
-	CreatedAt     string `json:"createdAt"`
+	ID                int64  `json:"id"`
+	WatchTargetID     int64  `json:"watchTargetId"`
+	WatchTargetName   string `json:"watchTargetName,omitempty"`
+	NotificationEmail string `json:"notificationEmail,omitempty"`
+	JobID             int64  `json:"jobId"`
+	ExternalJobID     string `json:"externalJobId"`
+	JobTitle          string `json:"jobTitle"`
+	JobURL            string `json:"jobUrl"`
+	Kind              string `json:"kind"`
+	Channel           string `json:"channel"`
+	Status            string `json:"status"`
+	SentAt            string `json:"sentAt,omitempty"`
+	ErrorMessage      string `json:"errorMessage,omitempty"`
+	CreatedAt         string `json:"createdAt"`
 }
 
 func (s *Store) ListPendingNotifications(ctx context.Context, limit int) ([]NotificationRecord, error) {
 	query := `
-		SELECT
-			n.id,
-			n.watch_target_id,
-			n.job_id,
-			j.external_job_id,
-			j.title,
+			SELECT
+				n.id,
+				n.watch_target_id,
+				wt.name,
+				COALESCE(wt.notification_email, ''),
+				n.job_id,
+				j.external_job_id,
+				j.title,
 			j.job_url,
 			n.kind,
 			n.channel,
@@ -36,11 +40,12 @@ func (s *Store) ListPendingNotifications(ctx context.Context, limit int) ([]Noti
 			COALESCE(n.sent_at, ''),
 			COALESCE(n.error_message, ''),
 			n.created_at
-		FROM notifications n
-		JOIN jobs j ON j.id = n.job_id
-		WHERE n.status = 'pending'
-		ORDER BY n.id ASC
-	`
+			FROM notifications n
+			JOIN jobs j ON j.id = n.job_id
+			JOIN watch_targets wt ON wt.id = n.watch_target_id
+			WHERE n.status = 'pending'
+			ORDER BY n.id ASC
+		`
 	args := []any{}
 	if limit > 0 {
 		query += " LIMIT ?"
@@ -71,12 +76,14 @@ func (s *Store) ListPendingNotifications(ctx context.Context, limit int) ([]Noti
 
 func (s *Store) ListNotificationsByWatchTarget(ctx context.Context, watchTargetID int64) ([]NotificationRecord, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT
-			n.id,
-			n.watch_target_id,
-			n.job_id,
-			j.external_job_id,
-			j.title,
+			SELECT
+				n.id,
+				n.watch_target_id,
+				wt.name,
+				COALESCE(wt.notification_email, ''),
+				n.job_id,
+				j.external_job_id,
+				j.title,
 			j.job_url,
 			n.kind,
 			n.channel,
@@ -84,10 +91,11 @@ func (s *Store) ListNotificationsByWatchTarget(ctx context.Context, watchTargetI
 			COALESCE(n.sent_at, ''),
 			COALESCE(n.error_message, ''),
 			n.created_at
-		FROM notifications n
-		JOIN jobs j ON j.id = n.job_id
-		WHERE n.watch_target_id = ?
-		ORDER BY n.id DESC
+			FROM notifications n
+			JOIN jobs j ON j.id = n.job_id
+			JOIN watch_targets wt ON wt.id = n.watch_target_id
+			WHERE n.watch_target_id = ?
+			ORDER BY n.id DESC
 	`, watchTargetID)
 	if err != nil {
 		return nil, fmt.Errorf("list notifications: %w", err)
@@ -145,6 +153,8 @@ func scanNotificationRecord(row scanner) (NotificationRecord, error) {
 	if err := row.Scan(
 		&notification.ID,
 		&notification.WatchTargetID,
+		&notification.WatchTargetName,
+		&notification.NotificationEmail,
 		&notification.JobID,
 		&notification.ExternalJobID,
 		&notification.JobTitle,

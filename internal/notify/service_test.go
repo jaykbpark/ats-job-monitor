@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jaykbpark/ats-job-monitor/internal/matching"
@@ -95,6 +96,96 @@ func TestConsoleSinkWritesJSONLine(t *testing.T) {
 	}
 }
 
+func TestRoutingSinkRoutesByChannel(t *testing.T) {
+	inbox := &fakeSink{}
+	email := &fakeSink{}
+	sink := NewRoutingSink(map[string]Sink{
+		"inbox": inbox,
+		"email": email,
+	})
+
+	if err := sink.Deliver(context.Background(), store.NotificationRecord{ID: 1, Channel: "email"}); err != nil {
+		t.Fatalf("deliver email: %v", err)
+	}
+	if err := sink.Deliver(context.Background(), store.NotificationRecord{ID: 2, Channel: "inbox"}); err != nil {
+		t.Fatalf("deliver inbox: %v", err)
+	}
+
+	if len(email.delivered) != 1 || email.delivered[0] != 1 {
+		t.Fatalf("unexpected email deliveries: %#v", email.delivered)
+	}
+	if len(inbox.delivered) != 1 || inbox.delivered[0] != 2 {
+		t.Fatalf("unexpected inbox deliveries: %#v", inbox.delivered)
+	}
+}
+
+type fakeMailer struct {
+	from string
+	to   []string
+	msg  []byte
+}
+
+func (f *fakeMailer) Send(from string, to []string, msg []byte) error {
+	f.from = from
+	f.to = append([]string(nil), to...)
+	f.msg = append([]byte(nil), msg...)
+	return nil
+}
+
+func TestSMTPSinkBuildsAndSendsEmail(t *testing.T) {
+	mailer := &fakeMailer{}
+	sink := &SMTPSink{
+		config: SMTPConfig{
+			Host: "smtp.example.com",
+			Port: 587,
+			From: "alerts@example.com",
+		},
+		sender: mailer,
+	}
+
+	err := sink.Deliver(context.Background(), store.NotificationRecord{
+		ID:                4,
+		Channel:           "email",
+		WatchTargetID:     9,
+		WatchTargetName:   "Demo Target",
+		NotificationEmail: "jobs@example.com",
+		JobTitle:          "Backend Engineer",
+		JobURL:            "https://example.com/jobs/4",
+		ExternalJobID:     "job-4",
+	})
+	if err != nil {
+		t.Fatalf("deliver email: %v", err)
+	}
+
+	if mailer.from != "alerts@example.com" {
+		t.Fatalf("unexpected from address: %q", mailer.from)
+	}
+	if len(mailer.to) != 1 || mailer.to[0] != "jobs@example.com" {
+		t.Fatalf("unexpected recipients: %#v", mailer.to)
+	}
+
+	message := string(mailer.msg)
+	for _, snippet := range []string{
+		"Subject: [ATS Job Monitor] New matching role: Backend Engineer",
+		"To: jobs@example.com",
+		"Watch target: Demo Target",
+		"Role: Backend Engineer",
+		"URL: https://example.com/jobs/4",
+		"External job ID: job-4",
+	} {
+		if !strings.Contains(message, snippet) {
+			t.Fatalf("expected message to contain %q: %s", snippet, message)
+		}
+	}
+}
+
+func TestNewSMTPSinkRejectsInvalidConfig(t *testing.T) {
+	_, err := NewSMTPSink(SMTPConfig{})
+	if err == nil {
+		t.Fatal("expected invalid SMTP config to fail")
+	}
+}
+
 func openNotifyTestStore(t *testing.T) *store.Store {
 	t.Helper()
 
@@ -115,10 +206,11 @@ func seedPendingNotifications(t *testing.T, ctx context.Context, dbStore *store.
 	t.Helper()
 
 	target, err := dbStore.CreateWatchTarget(ctx, store.CreateWatchTargetParams{
-		Name:      "Demo",
-		Provider:  "greenhouse",
-		BoardKey:  "demo",
-		SourceURL: "https://example.com",
+		Name:              "Demo",
+		Provider:          "greenhouse",
+		BoardKey:          "demo",
+		SourceURL:         "https://example.com",
+		NotificationEmail: "jobs@example.com",
 	})
 	if err != nil {
 		t.Fatalf("create watch target: %v", err)

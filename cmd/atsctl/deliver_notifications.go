@@ -32,7 +32,13 @@ func runDeliverNotifications(args []string) {
 		os.Exit(1)
 	}
 
-	service := notify.NewService(dbStore, notify.NewConsoleSink(os.Stdout))
+	sink, err := buildDeliverySink(context.Background(), dbStore, limit)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "failed to configure notification delivery: %v\n", err)
+		os.Exit(1)
+	}
+
+	service := notify.NewService(dbStore, sink)
 	result, err := service.DeliverPending(context.Background(), limit)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "failed to deliver notifications: %v\n", err)
@@ -75,4 +81,30 @@ func parseDeliverNotificationsArgs(args []string) (int, string, error) {
 	}
 
 	return limit, dbPath, nil
+}
+
+func buildDeliverySink(ctx context.Context, dbStore *store.Store, limit int) (notify.Sink, error) {
+	pending, err := dbStore.ListPendingNotifications(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	sinks := map[string]notify.Sink{
+		"inbox": notify.NewConsoleSink(os.Stdout),
+	}
+
+	for _, notification := range pending {
+		if notification.Channel != "email" {
+			continue
+		}
+
+		emailSink, err := notify.NewSMTPSinkFromEnv()
+		if err != nil {
+			return nil, err
+		}
+		sinks["email"] = emailSink
+		break
+	}
+
+	return notify.NewRoutingSink(sinks), nil
 }
