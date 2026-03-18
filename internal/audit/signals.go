@@ -84,6 +84,11 @@ type jobFetcher interface {
 }
 
 var htmlTagPattern = regexp.MustCompile(`<[^>]+>`)
+var (
+	auditRangeYearsPattern   = regexp.MustCompile(`\b(\d{1,2})\s*(?:-|to)\s*(\d{1,2})\s*(?:years|year|yrs|yr)\b`)
+	auditMinYearsPattern     = regexp.MustCompile(`\b(\d{1,2})\+?\s*(?:years|year|yrs|yr)(?:\s+(?:of\s+)?experience)?\b`)
+	auditAtLeastYearsPattern = regexp.MustCompile(`\b(?:at least|minimum of)\s+(\d{1,2})\s*(?:years|year|yrs|yr)\b`)
+)
 
 func DefaultTargets() ([]SignalAuditTarget, error) {
 	var targets []SignalAuditTarget
@@ -136,7 +141,7 @@ func RunSignalAudit(ctx context.Context, options SignalAuditOptions) (SignalAudi
 			continue
 		}
 
-		jobs, err := fetcher.FetchJobs(ctx, target.BoardKey)
+		jobs, err := fetchJobsForAudit(ctx, target, fetcher)
 		if err != nil {
 			targetReport.Error = err.Error()
 			report.Summary.FailedTargets++
@@ -315,6 +320,7 @@ func isEngineeringJob(job providers.Job) bool {
 		"support engineer",
 		"customer engineer",
 		"forward deployed engineer",
+		"developer advocacy",
 		"account executive",
 		"account manager",
 		"customer success",
@@ -328,6 +334,7 @@ func isEngineeringJob(job providers.Job) bool {
 		"legal",
 		"attorney",
 		"counsel",
+		"physical security",
 	}
 
 	for _, candidate := range excludedTitles {
@@ -351,7 +358,6 @@ func isEngineeringJob(job providers.Job) bool {
 		"ios",
 		"android",
 		"machine learning",
-		"security",
 		"firmware",
 		"embedded",
 		"architect",
@@ -388,6 +394,16 @@ func normalizeForMatch(value string) string {
 	return strings.Join(strings.Fields(value), " ")
 }
 
+func fetchJobsForAudit(ctx context.Context, target SignalAuditTarget, fetcher jobFetcher) ([]providers.Job, error) {
+	if target.Provider == "greenhouse" {
+		if greenhouseClient, ok := fetcher.(*providers.GreenhouseClient); ok {
+			return greenhouseClient.FetchJobsWithContent(ctx, target.BoardKey)
+		}
+	}
+
+	return fetcher.FetchJobs(ctx, target.BoardKey)
+}
+
 func buildChecks(provider string, job providers.Job, derived signals.JobSignals) []SignalAuditCheck {
 	checks := []SignalAuditCheck{
 		{
@@ -408,6 +424,22 @@ func buildChecks(provider string, job providers.Job, derived signals.JobSignals)
 			Expected: expectedEmploymentType(job.EmploymentType),
 			Actual:   derived.NormalizedEmploymentType,
 		},
+	}
+
+	if expectsEvidenceText(job) {
+		evidenceText := extractEvidenceFullText(job)
+		checks = append(checks, SignalAuditCheck{
+			Name:     "evidence_text_present",
+			Status:   passOrFail(strings.TrimSpace(evidenceText) != ""),
+			Expected: "non-empty",
+			Actual:   presenceValue(evidenceText),
+		})
+	} else {
+		checks = append(checks, SignalAuditCheck{
+			Name:   "evidence_text_present",
+			Status: "skip",
+			Notes:  "provider payload does not expose a description/content field for this job",
+		})
 	}
 
 	if expected, notes, ok := expectedRemote(provider, job); ok {
@@ -438,6 +470,21 @@ func buildChecks(provider string, job providers.Job, derived signals.JobSignals)
 			Name:   "seniority_matches_title",
 			Status: "skip",
 			Notes:  "title does not contain an explicit seniority token",
+		})
+	}
+
+	if expectedMin, expectedMax, ok := explicitExperienceFromEvidence(job); ok {
+		checks = append(checks, SignalAuditCheck{
+			Name:     "experience_matches_evidence",
+			Status:   passOrFail(intPointersEqual(expectedMin, derived.MinYearsExperience) && intPointersEqual(expectedMax, derived.MaxYearsExperience)),
+			Expected: formatExperienceRange(expectedMin, expectedMax),
+			Actual:   formatExperienceRange(derived.MinYearsExperience, derived.MaxYearsExperience),
+		})
+	} else {
+		checks = append(checks, SignalAuditCheck{
+			Name:   "experience_matches_evidence",
+			Status: "skip",
+			Notes:  "description does not contain an explicit years-of-experience pattern",
 		})
 	}
 
@@ -550,6 +597,15 @@ func explicitTitleSeniority(title string) (string, bool) {
 }
 
 func extractEvidenceText(job providers.Job) string {
+	evidenceText := extractEvidenceFullText(job)
+	if evidenceText == "" {
+		return ""
+	}
+
+	return trimSnippet(evidenceText, 320)
+}
+
+func extractEvidenceFullText(job providers.Job) string {
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(job.RawJSON), &payload); err != nil {
 		return ""
@@ -569,22 +625,25 @@ func extractEvidenceText(job providers.Job) string {
 			continue
 		}
 
-		return trimSnippet(value, 320)
+		return cleanEvidenceText(value)
 	}
 
 	return ""
 }
 
 func trimSnippet(value string, limit int) string {
-	cleaned := htmlTagPattern.ReplaceAllString(value, " ")
-	cleaned = html.UnescapeString(cleaned)
-	cleaned = strings.Join(strings.Fields(cleaned), " ")
-
+	cleaned := cleanEvidenceText(value)
 	if limit <= 0 || len(cleaned) <= limit {
 		return cleaned
 	}
 
 	return strings.TrimSpace(cleaned[:limit]) + "..."
+}
+
+func cleanEvidenceText(value string) string {
+	cleaned := html.UnescapeString(value)
+	cleaned = htmlTagPattern.ReplaceAllString(cleaned, " ")
+	return strings.Join(strings.Fields(cleaned), " ")
 }
 
 func emptyOrValue(value string) string {
@@ -599,4 +658,74 @@ func presenceValue(value string) string {
 		return "<empty>"
 	}
 	return "<present>"
+}
+
+func expectsEvidenceText(job providers.Job) bool {
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(job.RawJSON), &payload); err != nil {
+		return false
+	}
+
+	for _, field := range []string{"descriptionPlain", "additionalPlain", "descriptionHtml", "description", "content"} {
+		if _, ok := payload[field]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+func explicitExperienceFromEvidence(job providers.Job) (*int, *int, bool) {
+	evidenceText := strings.ToLower(extractEvidenceFullText(job))
+	if strings.TrimSpace(evidenceText) == "" {
+		return nil, nil, false
+	}
+
+	if matches := auditRangeYearsPattern.FindStringSubmatch(evidenceText); len(matches) == 3 {
+		minValue := parseInt(matches[1])
+		maxValue := parseInt(matches[2])
+		return &minValue, &maxValue, true
+	}
+
+	if matches := auditAtLeastYearsPattern.FindStringSubmatch(evidenceText); len(matches) == 2 {
+		minValue := parseInt(matches[1])
+		return &minValue, nil, true
+	}
+
+	if matches := auditMinYearsPattern.FindStringSubmatch(evidenceText); len(matches) == 2 {
+		minValue := parseInt(matches[1])
+		return &minValue, nil, true
+	}
+
+	return nil, nil, false
+}
+
+func formatExperienceRange(minYears *int, maxYears *int) string {
+	switch {
+	case minYears == nil && maxYears == nil:
+		return "unknown"
+	case minYears != nil && maxYears != nil:
+		return fmt.Sprintf("%d-%d", *minYears, *maxYears)
+	case minYears != nil:
+		return fmt.Sprintf("%d+", *minYears)
+	default:
+		return "unknown"
+	}
+}
+
+func intPointersEqual(left *int, right *int) bool {
+	switch {
+	case left == nil && right == nil:
+		return true
+	case left == nil || right == nil:
+		return false
+	default:
+		return *left == *right
+	}
+}
+
+func parseInt(value string) int {
+	var parsed int
+	_, _ = fmt.Sscanf(value, "%d", &parsed)
+	return parsed
 }

@@ -93,6 +93,8 @@ Run the live signal audit against the embedded board manifest:
 go run ./cmd/atsctl audit-signals
 ```
 
+The audit uses content-enabled Greenhouse fetches so it can verify that description/evidence text is present and that explicit years-of-experience in the job content match the derived signals.
+
 Filter the live audit to one provider or switch to JSON output:
 
 ```bash

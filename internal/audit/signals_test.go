@@ -14,12 +14,15 @@ func TestSampleEngineeringJobs(t *testing.T) {
 		{ExternalJobID: "3", Title: "Product Designer", Department: "Design"},
 		{ExternalJobID: "4", Title: "Platform Developer", Team: "Infrastructure"},
 		{ExternalJobID: "5", Title: "Account Executive, Platforms", Department: "Sales"},
+		{ExternalJobID: "6", Title: "Developer Advocacy Director", Department: "Marketing"},
+		{ExternalJobID: "7", Title: "Senior Security Engineer", Department: "Engineering"},
+		{ExternalJobID: "8", Title: "Director, Safety & Physical Security", Department: "Corporate Security"},
 	}
 
-	got := sampleEngineeringJobs(jobs, 2)
+	got := sampleEngineeringJobs(jobs, 3)
 
-	if len(got) != 2 {
-		t.Fatalf("expected 2 sampled jobs, got %d", len(got))
+	if len(got) != 3 {
+		t.Fatalf("expected 3 sampled jobs, got %d", len(got))
 	}
 
 	if got[0].ExternalJobID != "2" {
@@ -28,6 +31,10 @@ func TestSampleEngineeringJobs(t *testing.T) {
 
 	if got[1].ExternalJobID != "4" {
 		t.Fatalf("unexpected second sampled job: %q", got[1].ExternalJobID)
+	}
+
+	if got[2].ExternalJobID != "7" {
+		t.Fatalf("unexpected third sampled job: %q", got[2].ExternalJobID)
 	}
 }
 
@@ -46,8 +53,10 @@ func TestBuildChecksUsesProviderGroundTruth(t *testing.T) {
 	assertCheckStatus(t, checks, "search_text_populated", "pass")
 	assertCheckStatus(t, checks, "normalized_location_populated", "pass")
 	assertCheckStatus(t, checks, "employment_type_captured", "pass")
+	assertCheckStatus(t, checks, "evidence_text_present", "pass")
 	assertCheckStatus(t, checks, "remote_matches_provider_signal", "pass")
 	assertCheckStatus(t, checks, "seniority_matches_title", "pass")
+	assertCheckStatus(t, checks, "experience_matches_evidence", "pass")
 }
 
 func TestExtractEvidenceTextStripsHTML(t *testing.T) {
@@ -60,6 +69,22 @@ func TestExtractEvidenceTextStripsHTML(t *testing.T) {
 	if got != want {
 		t.Fatalf("extractEvidenceText() = %q, want %q", got, want)
 	}
+}
+
+func TestBuildChecksUsesGreenhouseContentForEvidence(t *testing.T) {
+	job := providers.Job{
+		Title:        "Software Engineer",
+		Location:     "Remote",
+		Department:   "Engineering",
+		RawJSON:      `{"content":"&lt;p&gt;Candidates need at least 4 years in backend systems.&lt;/p&gt;"}`,
+		MetadataJSON: `{}`,
+	}
+
+	derived := signals.Derive(job)
+	checks := buildChecks("greenhouse", job, derived)
+
+	assertCheckStatus(t, checks, "evidence_text_present", "pass")
+	assertCheckStatus(t, checks, "experience_matches_evidence", "pass")
 }
 
 func assertCheckStatus(t *testing.T, checks []SignalAuditCheck, name string, want string) {

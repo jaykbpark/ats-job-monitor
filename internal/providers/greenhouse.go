@@ -24,6 +24,7 @@ type greenhouseJob struct {
 	ID          int64                 `json:"id"`
 	Title       string                `json:"title"`
 	AbsoluteURL string                `json:"absolute_url"`
+	Content     string                `json:"content"`
 	Location    greenhouseLocation    `json:"location"`
 	Metadata    json.RawMessage       `json:"metadata"`
 	Departments []greenhouseNamedItem `json:"departments"`
@@ -46,6 +47,14 @@ func NewGreenhouseClient() *GreenhouseClient {
 }
 
 func (c *GreenhouseClient) FetchJobs(ctx context.Context, boardKey string) ([]Job, error) {
+	return c.fetchJobs(ctx, boardKey, false)
+}
+
+func (c *GreenhouseClient) FetchJobsWithContent(ctx context.Context, boardKey string) ([]Job, error) {
+	return c.fetchJobs(ctx, boardKey, true)
+}
+
+func (c *GreenhouseClient) fetchJobs(ctx context.Context, boardKey string, includeContent bool) ([]Job, error) {
 	baseURL := strings.TrimRight(c.BaseURL, "/")
 	if baseURL == "" {
 		baseURL = "https://boards-api.greenhouse.io"
@@ -56,7 +65,7 @@ func (c *GreenhouseClient) FetchJobs(ctx context.Context, boardKey string) ([]Jo
 		httpClient = &http.Client{Timeout: 15 * time.Second}
 	}
 
-	requestURL := fmt.Sprintf("%s/v1/boards/%s/jobs?content=false", baseURL, url.PathEscape(boardKey))
+	requestURL := fmt.Sprintf("%s/v1/boards/%s/jobs?content=%t", baseURL, url.PathEscape(boardKey), includeContent)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build greenhouse request: %w", err)
