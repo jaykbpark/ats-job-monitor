@@ -1,0 +1,102 @@
+[
+  {
+    "name": "greenhouse_figma_manager_billing",
+    "provider": "greenhouse",
+    "boardKey": "figma",
+    "job": {
+      "title": "Manager, Software Engineering - Billing",
+      "location": "San Francisco, CA New York, NY United States",
+      "department": "Engineering",
+      "employmentType": "full-time",
+      "rawJson": "{\"content\":\"Billing is a full stack engineering group. This is a full time role that can be held from one of our US hubs or remotely in the United States. We'd love to hear from you if you have 4+ years of experience hiring and leading teams as an engineering manager.\"}"
+    },
+    "expected": {
+      "normalizedEmploymentType": "full-time",
+      "seniority": "manager",
+      "isRemote": true,
+      "minYearsExperience": 4,
+      "experienceConfidence": "high"
+    }
+  },
+  {
+    "name": "lever_level_ai_lead_software_engineer",
+    "provider": "lever",
+    "boardKey": "levelai",
+    "job": {
+      "title": "Lead Software Engineer",
+      "location": "Noida",
+      "department": "Engineering",
+      "team": "Engineering",
+      "employmentType": "Full Time",
+      "metadataJson": "{\"workplaceType\":\"hybrid\"}",
+      "rawJson": "{\"descriptionPlain\":\"We are looking for a Lead Software Engineer to help raise the engineering bar for the entire technology stack at Level AI. They will coach and mentor junior engineers and drive engineering best practices.\"}"
+    },
+    "expected": {
+      "normalizedEmploymentType": "full-time",
+      "seniority": "senior",
+      "isRemote": false,
+      "experienceConfidence": "unknown"
+    }
+  },
+  {
+    "name": "lever_tutor_robot_perception_engineer",
+    "provider": "lever",
+    "boardKey": "tutorintelligence",
+    "job": {
+      "title": "Robot Perception Engineer",
+      "location": "Watertown, MA",
+      "department": "R&D - Software",
+      "team": "R&D - Software",
+      "employmentType": "Full-time",
+      "metadataJson": "{\"workplaceType\":\"onsite\"}",
+      "rawJson": "{\"descriptionPlain\":\"Who You Are\\n3+ years of experience in perception, robotics, or a closely related engineering role\\nStrong foundations in computer vision, robotics, or related fields\"}"
+    },
+    "expected": {
+      "normalizedEmploymentType": "full-time",
+      "seniority": "unknown",
+      "isRemote": false,
+      "minYearsExperience": 3,
+      "experienceConfidence": "high"
+    }
+  },
+  {
+    "name": "ashby_openai_senior_identity_platform",
+    "provider": "ashby",
+    "boardKey": "openai",
+    "job": {
+      "title": "Senior Software Engineer, Identity Platform",
+      "location": "San Francisco",
+      "department": "Applied AI",
+      "team": "Applied AI Engineering",
+      "employmentType": "FullTime",
+      "metadataJson": "{\"isRemote\":false}",
+      "rawJson": "{\"employmentType\":\"FullTime\",\"isRemote\":false,\"secondaryLocations\":[]}"
+    },
+    "expected": {
+      "normalizedEmploymentType": "full-time",
+      "seniority": "senior",
+      "isRemote": false,
+      "experienceConfidence": "unknown"
+    }
+  },
+  {
+    "name": "ashby_ramp_mobile_engineer_android",
+    "provider": "ashby",
+    "boardKey": "ramp",
+    "job": {
+      "title": "Mobile Engineer, Android",
+      "location": "New York, NY (HQ)",
+      "department": "Engineering",
+      "team": "Mobile",
+      "employmentType": "FullTime",
+      "metadataJson": "{\"isRemote\":true,\"workplaceType\":\"Hybrid\",\"secondaryLocations\":[{\"location\":\"San Francisco, CA\"},{\"location\":\"Remote - US\"},{\"location\":\"Remote - Canada\"}]}",
+      "rawJson": "{\"employmentType\":\"FullTime\",\"isRemote\":true,\"workplaceType\":\"Hybrid\",\"secondaryLocations\":[{\"location\":\"San Francisco, CA\"},{\"location\":\"Remote - US\"},{\"location\":\"Remote - Canada\"}]}"
+    },
+    "expected": {
+      "normalizedEmploymentType": "full-time",
+      "seniority": "unknown",
+      "isRemote": true,
+      "experienceConfidence": "unknown"
+    }
+  }
+]

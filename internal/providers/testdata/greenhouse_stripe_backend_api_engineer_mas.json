@@ -1,0 +1,19 @@
+{
+  "jobs": [
+    {
+      "id": 6176758,
+      "title": "Backend/API Engineer, Money as a Service",
+      "absolute_url": "https://job-boards.greenhouse.io/stripe/jobs/6176758",
+      "content": "&lt;p&gt;&lt;strong&gt;&lt;em&gt;Note:&lt;/em&gt;&lt;/strong&gt; &lt;em&gt;if you are an intern, new grad, staff, frontend or fullstack applicant, please do not apply using this link and visit our jobs page for those specific postings.&lt;/em&gt;&lt;/p&gt;&lt;h2&gt;Who we are&lt;/h2&gt;&lt;p&gt;Stripe is a financial infrastructure platform for businesses.&lt;/p&gt;",
+      "location": {
+        "name": "US"
+      },
+      "metadata": null,
+      "departments": [
+        {
+          "name": "8546 MMS Platform - Eng"
+        }
+      ]
+    }
+  ]
+}
