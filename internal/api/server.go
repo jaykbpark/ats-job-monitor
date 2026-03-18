@@ -142,7 +142,16 @@ func (s *Server) handleListWatchTargetJobs(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	jobs, err := s.store.ListJobsByWatchTarget(r.Context(), watchTargetID)
+	matchedFilter, err := parseOptionalBoolQuery(r, "matched")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	jobs, err := s.store.ListJobsByWatchTarget(r.Context(), store.ListJobsParams{
+		WatchTargetID: watchTargetID,
+		Matched:       matchedFilter,
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("list watch target jobs: %v", err))
 		return
@@ -246,6 +255,20 @@ func parseWatchTargetID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	}
 
 	return id, true
+}
+
+func parseOptionalBoolQuery(r *http.Request, key string) (*bool, error) {
+	rawValue := strings.TrimSpace(r.URL.Query().Get(key))
+	if rawValue == "" {
+		return nil, nil
+	}
+
+	parsed, err := strconv.ParseBool(rawValue)
+	if err != nil {
+		return nil, fmt.Errorf("%s must be true or false", key)
+	}
+
+	return &parsed, nil
 }
 
 func withLogging(next http.Handler) http.Handler {

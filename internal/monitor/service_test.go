@@ -97,7 +97,7 @@ func TestSyncWatchTargetPersistsJobsAndRun(t *testing.T) {
 		t.Fatalf("expected 1 matched job, got %d", run.MatchedJobsCount)
 	}
 
-	jobs, err := dbStore.ListJobsByWatchTarget(ctx, target.ID)
+	jobs, err := dbStore.ListJobsByWatchTarget(ctx, store.ListJobsParams{WatchTargetID: target.ID})
 	if err != nil {
 		t.Fatalf("list synced jobs: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestSyncWatchTargetSupportsLever(t *testing.T) {
 		t.Fatalf("expected succeeded run, got %q", run.Status)
 	}
 
-	jobs, err := dbStore.ListJobsByWatchTarget(ctx, target.ID)
+	jobs, err := dbStore.ListJobsByWatchTarget(ctx, store.ListJobsParams{WatchTargetID: target.ID})
 	if err != nil {
 		t.Fatalf("list synced jobs: %v", err)
 	}
@@ -348,7 +348,7 @@ func TestSyncWatchTargetSupportsAshby(t *testing.T) {
 		t.Fatalf("expected succeeded run, got %q", run.Status)
 	}
 
-	jobs, err := dbStore.ListJobsByWatchTarget(ctx, target.ID)
+	jobs, err := dbStore.ListJobsByWatchTarget(ctx, store.ListJobsParams{WatchTargetID: target.ID})
 	if err != nil {
 		t.Fatalf("list synced jobs: %v", err)
 	}

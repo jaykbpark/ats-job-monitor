@@ -54,6 +54,11 @@ type SyncJobsResult struct {
 	NewMatchesCount  int `json:"newMatchesCount"`
 }
 
+type ListJobsParams struct {
+	WatchTargetID int64
+	Matched       *bool
+}
+
 func (s *Store) SyncJobs(ctx context.Context, watchTargetID int64, jobs []SyncedJob) (SyncJobsResult, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -206,8 +211,8 @@ func (s *Store) SyncJobs(ctx context.Context, watchTargetID int64, jobs []Synced
 	}, nil
 }
 
-func (s *Store) ListJobsByWatchTarget(ctx context.Context, watchTargetID int64) ([]JobRecord, error) {
-	rows, err := s.db.QueryContext(ctx, `
+func (s *Store) ListJobsByWatchTarget(ctx context.Context, params ListJobsParams) ([]JobRecord, error) {
+	query := `
 		SELECT
 			id,
 			watch_target_id,
@@ -237,8 +242,15 @@ func (s *Store) ListJobsByWatchTarget(ctx context.Context, watchTargetID int64) 
 			is_active
 		FROM jobs
 		WHERE watch_target_id = ?
-		ORDER BY id ASC
-	`, watchTargetID)
+	`
+	args := []any{params.WatchTargetID}
+	if params.Matched != nil {
+		query += ` AND is_match = ?`
+		args = append(args, boolToInt(*params.Matched))
+	}
+	query += ` ORDER BY id ASC`
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list jobs by watch target: %w", err)
 	}

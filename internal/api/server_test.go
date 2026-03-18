@@ -249,6 +249,48 @@ func TestSyncWatchTargetAndListJobs(t *testing.T) {
 		t.Fatalf("expected second synced job not to match filters, got %#v", jobs[1]["isMatch"])
 	}
 
+	matchedJobsReq := httptest.NewRequest(http.MethodGet, "/api/watch-targets/1/jobs?matched=true", nil)
+	matchedJobsRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(matchedJobsRecorder, matchedJobsReq)
+
+	if matchedJobsRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from matched jobs list, got %d", matchedJobsRecorder.Code)
+	}
+
+	var matchedJobs []map[string]any
+	if err := json.Unmarshal(matchedJobsRecorder.Body.Bytes(), &matchedJobs); err != nil {
+		t.Fatalf("decode matched jobs response: %v", err)
+	}
+
+	if len(matchedJobs) != 1 {
+		t.Fatalf("expected 1 matched job, got %d", len(matchedJobs))
+	}
+
+	if matchedJobs[0]["isMatch"] != true {
+		t.Fatalf("expected matched job response to contain only matches, got %#v", matchedJobs[0]["isMatch"])
+	}
+
+	unmatchedJobsReq := httptest.NewRequest(http.MethodGet, "/api/watch-targets/1/jobs?matched=false", nil)
+	unmatchedJobsRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(unmatchedJobsRecorder, unmatchedJobsReq)
+
+	if unmatchedJobsRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from unmatched jobs list, got %d", unmatchedJobsRecorder.Code)
+	}
+
+	var unmatchedJobs []map[string]any
+	if err := json.Unmarshal(unmatchedJobsRecorder.Body.Bytes(), &unmatchedJobs); err != nil {
+		t.Fatalf("decode unmatched jobs response: %v", err)
+	}
+
+	if len(unmatchedJobs) != 1 {
+		t.Fatalf("expected 1 unmatched job, got %d", len(unmatchedJobs))
+	}
+
+	if unmatchedJobs[0]["isMatch"] != false {
+		t.Fatalf("expected unmatched job response to contain only non-matches, got %#v", unmatchedJobs[0]["isMatch"])
+	}
+
 	runsReq := httptest.NewRequest(http.MethodGet, "/api/watch-targets/1/sync-runs", nil)
 	runsRecorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(runsRecorder, runsReq)
@@ -289,6 +331,20 @@ func TestSyncWatchTargetAndListJobs(t *testing.T) {
 
 	if notifications[0]["kind"] != "new_match" {
 		t.Fatalf("unexpected notification kind: %#v", notifications[0]["kind"])
+	}
+}
+
+func TestListWatchTargetJobsRejectsInvalidMatchedFilter(t *testing.T) {
+	server := newTestServer(t)
+
+	createWatchTargetForTest(t, server, `{"includeKeywordsAny":["backend"]}`)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/watch-targets/1/jobs?matched=maybe", nil)
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", recorder.Code)
 	}
 }
 
