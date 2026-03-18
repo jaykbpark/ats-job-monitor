@@ -28,6 +28,8 @@ func main() {
 		runMigrate(os.Args[2:])
 	case "audit-signals":
 		runAuditSignals(os.Args[2:])
+	case "deliver-notifications":
+		runDeliverNotifications(os.Args[2:])
 	default:
 		printUsage(1)
 	}
@@ -131,5 +133,6 @@ func printUsage(exitCode int) {
 	_, _ = fmt.Fprintln(os.Stderr, "  go run ./cmd/atsctl companies [query]")
 	_, _ = fmt.Fprintln(os.Stderr, "  go run ./cmd/atsctl migrate <db-path>")
 	_, _ = fmt.Fprintln(os.Stderr, "  go run ./cmd/atsctl audit-signals [--format markdown|json] [--provider greenhouse|lever|ashby] [--sample N] [--limit N]")
+	_, _ = fmt.Fprintln(os.Stderr, "  go run ./cmd/atsctl deliver-notifications <db-path> [--limit N]")
 	os.Exit(exitCode)
 }
