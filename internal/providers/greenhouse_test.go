@@ -50,3 +50,39 @@ func TestGreenhouseClientFetchJobs(t *testing.T) {
 		t.Fatalf("unexpected department: %q", jobs[0].Department)
 	}
 }
+
+func TestGreenhouseClientFetchJobsSupportsArrayMetadata(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{
+		  "jobs": [
+		    {
+		      "id": 99,
+		      "title": "Platform Engineer",
+		      "absolute_url": "https://job-boards.greenhouse.io/acme/jobs/99",
+		      "location": { "name": "Remote" },
+		      "metadata": ["remote", "us-only"],
+		      "departments": [{ "name": "Engineering" }]
+		    }
+		  ]
+		}`))
+	}))
+	defer server.Close()
+
+	client := &GreenhouseClient{
+		HTTPClient: server.Client(),
+		BaseURL:    server.URL,
+	}
+
+	jobs, err := client.FetchJobs(context.Background(), "acme")
+	if err != nil {
+		t.Fatalf("fetch jobs: %v", err)
+	}
+
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+
+	if jobs[0].MetadataJSON != `["remote", "us-only"]` {
+		t.Fatalf("unexpected metadata json: %q", jobs[0].MetadataJSON)
+	}
+}

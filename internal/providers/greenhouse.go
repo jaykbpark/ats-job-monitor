@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -24,7 +25,7 @@ type greenhouseJob struct {
 	Title       string                `json:"title"`
 	AbsoluteURL string                `json:"absolute_url"`
 	Location    greenhouseLocation    `json:"location"`
-	Metadata    map[string]any        `json:"metadata"`
+	Metadata    json.RawMessage       `json:"metadata"`
 	Departments []greenhouseNamedItem `json:"departments"`
 	Offices     []greenhouseNamedItem `json:"offices"`
 }
@@ -83,15 +84,7 @@ func (c *GreenhouseClient) FetchJobs(ctx context.Context, boardKey string) ([]Jo
 			return nil, fmt.Errorf("encode greenhouse raw job: %w", err)
 		}
 
-		metadata := job.Metadata
-		if metadata == nil {
-			metadata = map[string]any{}
-		}
-
-		metadataJSON, err := json.Marshal(metadata)
-		if err != nil {
-			return nil, fmt.Errorf("encode greenhouse metadata: %w", err)
-		}
+		metadataJSON := normalizeRawJSON(job.Metadata, []byte(`{}`))
 
 		jobs = append(jobs, Job{
 			ExternalJobID: fmt.Sprintf("%d", job.ID),
@@ -126,4 +119,13 @@ func firstNonEmpty(values ...string) string {
 	}
 
 	return ""
+}
+
+func normalizeRawJSON(value []byte, fallback []byte) string {
+	trimmed := bytes.TrimSpace(value)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return string(fallback)
+	}
+
+	return string(trimmed)
 }
